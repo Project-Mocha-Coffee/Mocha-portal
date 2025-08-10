@@ -60,38 +60,6 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200 text-gray-900 dark:text-white">
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-b dark:border-gray-800">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between p-4">
-          {/* ...existing logo code... */}
-
-          <div className="flex items-center space-x-6">
-            <nav className="bg-black rounded-full px-6 py-2">
-              <div className="flex items-center space-x-2">
-                <Link href="/">
-                  <button
-                    className={`px-4 py-1.5 rounded-full flex items-center transition-colors
-                      ${isActivePath('/') ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
-                  >
-                    Dashboard <ChevronDown className="ml-1.5 w-4 h-4" />
-                  </button>
-                </Link>
-                {["Marketplace", "Staking", "Yield"].map((tab) => (
-                  <Link key={tab} href={`/${tab.toLowerCase()}`}>
-                    <button
-                      className={`px-4 py-1.5 rounded-full transition-colors
-                        ${isActivePath(tab) ? 'text-white' : 'text-gray-400 hover:text-gray-200'}`}
-                    >
-                      {tab}
-                    </button>
-                  </Link>
-                ))}
-              </div>
-            </nav>
-
-            {/* ...rest of existing code... */}
-          </div>
-        </div>
-      </div>
       <Header />
 
       {/* Add padding to account for fixed header */}
