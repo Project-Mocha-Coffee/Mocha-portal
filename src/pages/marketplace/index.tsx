@@ -7,32 +7,114 @@ import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { useAccount, useReadContract, useReadContracts, useWriteContract, useBalance } from "wagmi"
-import { parseEther, formatEther } from "viem"
+import { useAccount, useReadContract, useReadContracts, useWriteContract } from "wagmi"
+import { parseUnits, formatUnits } from "viem"
 import { scrollSepolia } from "viem/chains"
 import Header from "@/components/@shared-components/header"
 import vault from "@/ABI/MochaTreeRightsABI.json"
 
-const MOCHA_TREE_CONTRACT_ADDRESS = "0x4b02Bada976702E83Cf91Cd0B896852099099352";
-const MOCHA_TREE_CONTRACT_ABI = vault.abi;
+// Types
+interface FarmConfig {
+  name: string;
+  shareTokenSymbol: string;
+  shareTokenAddress: `0x${string}`;
+  farmOwner: `0x${string}`;
+  treeCount: bigint;
+  targetAPY: bigint;
+  active: boolean;
+}
+
+interface Farm {
+  farmId: bigint;
+  data: FarmConfig | null;
+  balance: bigint;
+  error: Error | null;
+}
+
+interface SelectedFarmData {
+  farmId: bigint;
+  data: FarmConfig;
+  error: Error | null;
+}
+
+// Contract addresses and constants
+const MOCHA_TREE_CONTRACT_ADDRESS = "0x4b02Bada976702E83Cf91Cd0B896852099099352" as const;
+const MBT_TOKEN_ADDRESS = "0xb75083585DcB841b8B04ffAC89c78a16f2a5598B" as const;
+import type { Abi } from "viem";
+const MOCHA_TREE_CONTRACT_ABI = vault.abi as Abi;
+
+// MBT Token ABI
+const MBT_TOKEN_ABI = [
+  {
+    constant: true,
+    inputs: [{ name: "_owner", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ name: "balance", type: "uint256" }],
+    type: "function",
+  },
+  {
+    constant: false,
+    inputs: [
+      { name: "_spender", type: "address" },
+      { name: "_value", type: "uint256" },
+    ],
+    name: "approve",
+    outputs: [{ name: "success", type: "bool" }],
+    type: "function",
+  },
+  {
+    constant: false,
+    inputs: [
+      { name: "_to", type: "address" },
+      { name: "_value", type: "uint256" },
+    ],
+    name: "transfer",
+    outputs: [{ name: "success", type: "bool" }],
+    type: "function",
+  },
+  {
+    constant: true,
+    inputs: [],
+    name: "decimals",
+    outputs: [{ name: "", type: "uint8" }],
+    type: "function",
+  },
+  {
+    constant: true,
+    inputs: [
+      { name: "_owner", type: "address" },
+      { name: "_spender", type: "address" }
+    ],
+    name: "allowance",
+    outputs: [{ name: "remaining", type: "uint256" }],
+    type: "function",
+  },
+] as const;
+
 const BOND_PRICE_USD = 100;
+const MBT_DECIMALS = 18;
 const MAX_BONDS_PER_INVESTOR = 20;
 
 export default function Marketplace() {
-  const { address: userAddress, isConnected } = useAccount()
-  const [marketTab, setMarketTab] = useState("All")
-  const [sortBy, setSortBy] = useState("name")
-  const [sortOrder, setSortOrder] = useState("asc")
-  const [searchQuery, setSearchQuery] = useState("")
-  const [darkMode, setDarkMode] = useState(false)
-  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false)
-  const [selectedFarmId, setSelectedFarmId] = useState("")
-  const [selectedFarmName, setSelectedFarmName] = useState("")
-  const [bondAmount, setBondAmount] = useState("1")
-  const [purchaseError, setPurchaseError] = useState("")
-  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
-  const [selectedFarmData, setSelectedFarmData] = useState(null)
+  const { address: userAddress, isConnected } = useAccount();
+  
+  // State variables with proper typing
+  const [marketTab, setMarketTab] = useState<"All" | "Active">("All");
+  const [sortBy, setSortBy] = useState<"id" | "name" | "bonds" | "interest">("name");
+  const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
+  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [darkMode, setDarkMode] = useState<boolean>(false);
+  const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState<boolean>(false);
+  const [selectedFarmId, setSelectedFarmId] = useState<string>("");
+  const [selectedFarmName, setSelectedFarmName] = useState<string>("");
+  const [bondAmount, setBondAmount] = useState<string>("1");
+  const [purchaseError, setPurchaseError] = useState<string>("");
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState<boolean>(false);
+  const [selectedFarmData, setSelectedFarmData] = useState<SelectedFarmData | null>(null);
+  const [isApproving, setIsApproving] = useState<boolean>(false);
+  const [approvalTxHash, setApprovalTxHash] = useState<string>("");
 
+  // Contract reads
   const { data: activeFarmIds, isLoading: isLoadingActiveFarmIds, error: activeFarmIdsError } = useReadContract({
     address: MOCHA_TREE_CONTRACT_ADDRESS,
     abi: MOCHA_TREE_CONTRACT_ABI,
@@ -41,7 +123,7 @@ export default function Marketplace() {
   });
 
   const farmConfigContracts = activeFarmIds
-    ? activeFarmIds.map((farmId) => ({
+    ? (activeFarmIds as bigint[]).map((farmId) => ({
         address: MOCHA_TREE_CONTRACT_ADDRESS,
         abi: MOCHA_TREE_CONTRACT_ABI,
         functionName: 'getFarmConfig',
@@ -54,75 +136,125 @@ export default function Marketplace() {
     contracts: farmConfigContracts,
   });
 
-  const balanceContracts = farmConfigsData
+  const balanceContracts = farmConfigsData && isConnected
     ? farmConfigsData.map((result, index) => ({
-        address: result.status === 'success' ? result.result.shareTokenAddress : MOCHA_TREE_CONTRACT_ADDRESS,
-        abi: MOCHA_TREE_CONTRACT_ABI,
+        address: result.status === 'success' && activeFarmIds 
+          ? (result.result as FarmConfig).shareTokenAddress 
+          : MOCHA_TREE_CONTRACT_ADDRESS,
+        abi: MOCHA_TREE_CONTRACT_ABI as Abi,
         functionName: 'balanceOf',
         args: [userAddress],
         chainId: scrollSepolia.id,
       }))
     : [];
 
-  const { data: balanceData, isLoading: isLoadingBalances, error: balanceError } = useReadContracts({
+  const { data: balanceData, isLoading: isLoadingBalances } = useReadContracts({
     contracts: balanceContracts,
-    query: { enabled: isConnected },
+    query: { enabled: isConnected && balanceContracts.length > 0 },
   });
 
-  const { data: ethBalance } = useBalance({
-    address: userAddress,
+  // MBT Token balance and allowance
+  const { data: mbtBalance, refetch: refetchMbtBalance } = useReadContract({
+    address: MBT_TOKEN_ADDRESS,
+    abi: MBT_TOKEN_ABI,
+    functionName: 'balanceOf',
+    args: [userAddress],
     chainId: scrollSepolia.id,
     query: { enabled: isConnected },
   });
 
-  const farms = farmConfigsData
+  const { data: mbtAllowance, refetch: refetchAllowance } = useReadContract({
+    address: MBT_TOKEN_ADDRESS,
+    abi: MBT_TOKEN_ABI,
+    functionName: 'allowance',
+    args: [userAddress, MOCHA_TREE_CONTRACT_ADDRESS],
+    chainId: scrollSepolia.id,
+    query: { enabled: isConnected },
+  });
+
+  // Process farms data
+  const farms: Farm[] = farmConfigsData && activeFarmIds
     ? farmConfigsData.map((result, index) => ({
-        farmId: activeFarmIds[index],
-        data: result.status === 'success' ? result.result : null,
-        balance: balanceData && balanceData[index]?.status === 'success' ? balanceData[index].result : BigInt(0),
-        error: result.status === 'failure' ? result.error : null,
+        farmId: (activeFarmIds as bigint[])[index],
+        data: result.status === 'success' ? (result.result as FarmConfig) : null,
+        balance: balanceData && balanceData[index]?.status === 'success' 
+          ? (balanceData[index].result as bigint) 
+          : BigInt(0),
+        error: result.status === 'failure' ? (result.error as Error) : null,
       }))
     : [];
 
   const totalBondsOwned = farms.reduce((sum, { balance }) => sum + Number(balance), 0);
 
+  // Filter and sort farms
   const filteredFarms = farms
     .filter(({ data }) => {
-      if (!data) return false
-      if (marketTab === "Active") return data.active
-      return true
+      if (!data) return false;
+      if (marketTab === "Active") return data.active;
+      return true;
     })
     .filter(({ data }) => {
-      if (!searchQuery || !data) return true
+      if (!searchQuery || !data) return true;
       return (
         data.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         data.shareTokenSymbol.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+      );
     })
     .sort((a, b) => {
-      if (!a.data || !b.data) return 0
-      let comparison = 0
+      if (!a.data || !b.data) return 0;
+      let comparison = 0;
       switch (sortBy) {
         case "id":
-          comparison = Number(a.farmId) - Number(b.farmId)
-          break
+          comparison = Number(a.farmId) - Number(b.farmId);
+          break;
         case "name":
-          comparison = a.data.name.localeCompare(b.data.name)
-          break
+          comparison = a.data.name.localeCompare(b.data.name);
+          break;
         case "bonds":
-          comparison = Number(a.data.treeCount) - Number(b.data.treeCount)
-          break
+          comparison = Number(a.data.treeCount) - Number(b.data.treeCount);
+          break;
         case "interest":
-          comparison = Number(a.data.targetAPY) - Number(b.data.targetAPY)
-          break
+          comparison = Number(a.data.targetAPY) - Number(b.data.targetAPY);
+          break;
         default:
-          comparison = a.data.name.localeCompare(b.data.name)
+          comparison = a.data.name.localeCompare(b.data.name);
       }
-      return sortOrder === "asc" ? comparison : -comparison
-    })
+      return sortOrder === "asc" ? comparison : -comparison;
+    });
 
-  const { writeContract, isPending, isSuccess, error: writeError } = useWriteContract();
+  // Write contract hooks
+  const { writeContract: writeApprove, isPending: isApprovePending, isSuccess: isApproveSuccess } = useWriteContract();
+  const { writeContract: writePurchase, isPending: isPurchasePending, isSuccess: isPurchaseSuccess } = useWriteContract();
 
+  // Handle MBT token approval
+  const handleApproval = async (amount: bigint) => {
+    if (!isConnected) {
+      setPurchaseError("Please connect your wallet");
+      return false;
+    }
+
+    try {
+      setIsApproving(true);
+      setPurchaseError("");
+
+      await writeApprove({
+        address: MBT_TOKEN_ADDRESS,
+        abi: MBT_TOKEN_ABI,
+        functionName: 'approve',
+        args: [MOCHA_TREE_CONTRACT_ADDRESS, amount],
+      });
+
+      setApprovalTxHash(""); // Optionally clear or set to a static value if needed
+      return true;
+    } catch (err: any) {
+      setPurchaseError(`Approval failed: ${err.message || err.toString()}`);
+      return false;
+    } finally {
+      setIsApproving(false);
+    }
+  };
+
+  // Handle bond purchase
   const handlePurchase = async () => {
     if (!isConnected) {
       setPurchaseError("Please connect your wallet");
@@ -132,6 +264,7 @@ export default function Marketplace() {
     setPurchaseError("");
     const amount = parseInt(bondAmount);
 
+    // Validation
     if (!selectedFarmId) {
       setPurchaseError("No farm selected");
       return;
@@ -144,35 +277,53 @@ export default function Marketplace() {
       setPurchaseError(`Cannot exceed ${MAX_BONDS_PER_INVESTOR} bonds per investor`);
       return;
     }
-    const totalCost = parseEther((amount * BOND_PRICE_USD / 1000).toString());
-    if (ethBalance && BigInt(ethBalance.value) < totalCost) {
-      setPurchaseError("Insufficient ETH balance");
+
+    const totalCost = parseUnits(amount.toString(), MBT_DECIMALS);
+    
+    // Check MBT balance
+    if (!mbtBalance || BigInt(mbtBalance as bigint) < totalCost) {
+      setPurchaseError(`Insufficient MBT balance. You need ${formatUnits(totalCost, MBT_DECIMALS)} MBT`);
       return;
     }
 
+    // Check allowance
+    const currentAllowance = mbtAllowance ? BigInt(mbtAllowance as bigint) : BigInt(0);
+    
     try {
-      await writeContract({
+      // Approve MBT tokens if needed
+      if (currentAllowance < totalCost) {
+        const approvalSuccess = await handleApproval(totalCost);
+        if (!approvalSuccess) return;
+        
+        // Wait for approval to be confirmed
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await refetchAllowance();
+      }
+
+      // Purchase bonds
+      await writePurchase({
         address: MOCHA_TREE_CONTRACT_ADDRESS,
         abi: MOCHA_TREE_CONTRACT_ABI,
         functionName: 'purchaseBond',
-        args: [BigInt(selectedFarmId), BigInt(amount)],
-        value: totalCost,
+        args: [BigInt(selectedFarmId), totalCost],
       });
-    } catch (err) {
-      setPurchaseError("Transaction failed");
+
+    } catch (err: any) {
+      setPurchaseError(`Transaction failed: ${err.message || err.toString()}`);
     }
   };
 
+  // Handle wallet connection
   const handleConnectWallet = () => {
-    // Assuming Openfort SDK is globally available or imported
-    if (typeof openfort !== 'undefined') {
-      openfort.connect();
+    if (typeof (window as any).openfort !== 'undefined') {
+      (window as any).openfort.connect();
     } else {
       console.error("Openfort SDK not loaded");
       setPurchaseError("Wallet connection failed. Please try again.");
     }
   };
 
+  // Handle buy bonds button click
   const handleBuyBondsClick = (farmId: string, farmName: string) => {
     if (!isConnected) {
       handleConnectWallet();
@@ -183,47 +334,81 @@ export default function Marketplace() {
     }
   };
 
-  const handleRowClick = (farm) => {
-    setSelectedFarmData(farm);
-    setIsDetailsModalOpen(true);
+  // Handle row click
+  const handleRowClick = (farm: Farm) => {
+    if (farm.data) {
+      setSelectedFarmData({
+        farmId: farm.farmId,
+        data: farm.data,
+        error: farm.error
+      });
+      setIsDetailsModalOpen(true);
+    }
   };
 
+  // Effects
   useEffect(() => {
-    if (isSuccess) {
+    if (isPurchaseSuccess) {
       setIsPurchaseModalOpen(false);
       setBondAmount("1");
       setSelectedFarmId("");
       setSelectedFarmName("");
+      // Refetch balances
+      refetchMbtBalance();
+      refetchAllowance();
     }
-  }, [isSuccess]);
+  }, [isPurchaseSuccess, refetchMbtBalance, refetchAllowance]);
 
   useEffect(() => {
-    const savedMode = localStorage.getItem("darkMode")
-    if (savedMode !== null) {
-      setDarkMode(savedMode === "true")
-    } else {
-      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
-      setDarkMode(prefersDark)
+    if (isApproveSuccess) {
+      refetchAllowance();
     }
-  }, [])
+  }, [isApproveSuccess, refetchAllowance]);
+
+  useEffect(() => {
+    const savedMode = localStorage.getItem("darkMode");
+    if (savedMode !== null) {
+      setDarkMode(savedMode === "true");
+    } else {
+      const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      setDarkMode(prefersDark);
+    }
+  }, []);
 
   useEffect(() => {
     if (darkMode) {
-      document.documentElement.classList.add("dark")
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove("dark")
+      document.documentElement.classList.remove("dark");
     }
-    localStorage.setItem("darkMode", darkMode.toString())
-  }, [darkMode])
+    localStorage.setItem("darkMode", darkMode.toString());
+  }, [darkMode]);
 
+  // Utility functions
   const toggleSortOrder = () => {
-    setSortOrder(sortOrder === "asc" ? "desc" : "asc")
-  }
+    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+  };
 
-  const truncateAddress = (address) => {
-    if (!address) return "N/A"
-    return `${address.slice(0, 6)}...${address.slice(-4)}`
-  }
+  const truncateAddress = (address: string | undefined): string => {
+    if (!address) return "N/A";
+    return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  };
+
+  const formatMbtBalance = (): string => {
+    if (!mbtBalance) return "0";
+    return formatUnits(mbtBalance as bigint, MBT_DECIMALS);
+  };
+
+  const getCurrentAllowance = (): string => {
+    if (!mbtAllowance) return "0";
+    return formatUnits(mbtAllowance as bigint, MBT_DECIMALS);
+  };
+
+  const isApprovalNeeded = (amount: string): boolean => {
+    const requiredAmount = parseUnits(amount, MBT_DECIMALS);
+    const currentAllowance = mbtAllowance ? BigInt(mbtAllowance as bigint) : BigInt(0);
+    return currentAllowance < requiredAmount;
+  };
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200 text-gray-900 dark:text-white">
@@ -233,6 +418,11 @@ export default function Marketplace() {
           <div className="mb-6">
             <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">MARKETPLACE</div>
             <h1 className="text-3xl font-bold dark:text-white">Mocha Asset-Backed Bonds Marketplace</h1>
+            {isConnected && (
+              <div className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                MBT Balance: {formatMbtBalance()} MBT
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
@@ -249,7 +439,7 @@ export default function Marketplace() {
               />
             </div>
             <div className="flex items-center gap-2 w-full md:w-auto">
-              <Select value={sortBy} onValueChange={setSortBy}>
+              <Select value={sortBy} onValueChange={(value: "id" | "name" | "bonds" | "interest") => setSortBy(value)}>
                 <SelectTrigger className="w-[180px] bg-white dark:bg-gray-800 border-none">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
@@ -275,7 +465,7 @@ export default function Marketplace() {
             </div>
           </div>
 
-          <Tabs defaultValue="All" className="mb-6" value={marketTab} onValueChange={setMarketTab}>
+          <Tabs defaultValue="All" className="mb-6" value={marketTab} onValueChange={(value: "All" | "Active") => setMarketTab(value)}>
             <TabsList className="bg-gray-100 dark:bg-gray-800 border-none">
               <TabsTrigger value="All">All</TabsTrigger>
               <TabsTrigger value="Active">
@@ -338,42 +528,43 @@ export default function Marketplace() {
                     <tr
                       key={farmId.toString()}
                       className="border-b dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
-                      onClick={() => handleRowClick({ farmId, data, error })}
+                      onClick={() => handleRowClick({ farmId, data, error, balance: BigInt(0) })}
                     >
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{index + 1}</td>
                       <td className="px-4 py-4 whitespace-nowrap">
                         {error ? (
                           <div className="text-red-600 dark:text-red-400">Error</div>
-                        ) : (
+                        ) : data ? (
                           <div className="flex items-center">
                             <div className="text-sm font-medium text-gray-900 dark:text-white">{data.name}</div>
-                            {/* <div className="ml-2 text-sm text-gray-500 dark:text-gray-400">({data.shareTokenSymbol})</div> */}
                           </div>
-                        )}
+                        ) : null}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {error ? "N/A" : truncateAddress(data.farmOwner)}
+                        {error ? "N/A" : data ? truncateAddress(data.farmOwner) : "N/A"}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
-                        {error ? "N/A" : data.treeCount.toString()}
+                        {error ? "N/A" : data ? data.treeCount.toString() : "N/A"}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
-                        {error ? "N/A" : `$${Number(data.treeCount) * 10}`}
+                        {error ? "N/A" : data ? `$${Number(data.treeCount) * 10}` : "N/A"}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
                         {error ? (
                           <span className="text-red-600 dark:text-red-400">Error</span>
-                        ) : data.active ? (
-                          <span className="text-green-600 dark:text-green-400">Active</span>
-                        ) : (
-                          <span className="text-gray-500 dark:text-gray-400">Inactive</span>
-                        )}
+                        ) : data ? (
+                          data.active ? (
+                            <span className="text-green-600 dark:text-green-400">Active</span>
+                          ) : (
+                            <span className="text-gray-500 dark:text-gray-400">Inactive</span>
+                          )
+                        ) : null}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                         <Button
                           className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
-                          disabled={error || !data.active}
-                          onClick={() => handleBuyBondsClick(farmId.toString(), data.name)}
+                          disabled={error || !data?.active}
+                          onClick={() => data && handleBuyBondsClick(farmId.toString(), data.name)}
                         >
                           {isConnected ? "Buy Bonds" : "Connect Wallet"}
                         </Button>
@@ -385,7 +576,7 @@ export default function Marketplace() {
             </table>
           </div>
 
-          {/* Farm Details Popup */}
+          {/* Farm Details Modal */}
           <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
             <DialogContent className="bg-gray-50 dark:bg-gray-800 border-none max-w-[700px] p-6">
               <DialogHeader>
@@ -399,15 +590,12 @@ export default function Marketplace() {
                 </div>
               ) : (
                 <div className="space-y-6">
-                  {/* Map Placeholder */}
                   <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg text-center w-full h-[400px] flex items-center justify-center">
                     <div>
                       <h2 className="text-lg font-semibold dark:text-white mb-2">Farm Location</h2>
                       <p className="text-gray-500 dark:text-gray-400">Map Coming Soon</p>
                     </div>
                   </div>
-
-                  {/* Farm Information */}
                   <div className="p-4 rounded-lg">
                     <h2 className="text-lg font-semibold dark:text-white mb-3">Farm Information</h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -469,7 +657,7 @@ export default function Marketplace() {
             </DialogContent>
           </Dialog>
 
-          {/* Purchase Bonds Popup */}
+          {/* Purchase Bonds Modal */}
           <Dialog open={isPurchaseModalOpen} onOpenChange={setIsPurchaseModalOpen}>
             <DialogContent className="bg-gray-50 dark:bg-gray-800 border-none p-6">
               <DialogHeader>
@@ -492,56 +680,147 @@ export default function Marketplace() {
                   </div>
                 ) : (
                   <>
+                    <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Your MBT Balance:</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white">{formatMbtBalance()} MBT</span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Current Allowance:</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-200">{getCurrentAllowance()} MBT</span>
+                      </div>
+                    </div>
+                    
                     <div>
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Number of Bonds (1–20)</label>
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Number of Bonds (1–{MAX_BONDS_PER_INVESTOR - totalBondsOwned})</label>
                       <Input
                         type="number"
                         min="1"
-                        max="20"
+                        max={MAX_BONDS_PER_INVESTOR - totalBondsOwned}
                         value={bondAmount}
                         onChange={(e) => setBondAmount(e.target.value)}
                         className="bg-white dark:bg-gray-800 border-none"
+                        placeholder="Enter number of bonds"
                       />
-                    </div>
-                    <div>
-                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Cost</label>
-                      <p className="text-base font-medium dark:text-white">
-                        ${parseInt(bondAmount || "0") * BOND_PRICE_USD}.00 (~{parseFloat(formatEther(parseEther((parseInt(bondAmount || "0") * BOND_PRICE_USD / 1000).toString()))).toFixed(4)} ETH)
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        You currently own {totalBondsOwned} bonds
                       </p>
                     </div>
+                    
+                    <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Bond Cost:</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-200">1 MBT each</span>
+                      </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">Total MBT Cost:</span>
+                        <span className="text-sm font-bold text-gray-900 dark:text-white">
+                          {bondAmount ? parseInt(bondAmount) : 0} MBT
+                        </span>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-600 dark:text-gray-300">USD Equivalent:</span>
+                        <span className="text-sm text-gray-700 dark:text-gray-200">
+                          ${(parseInt(bondAmount || "0") * BOND_PRICE_USD).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {isApprovalNeeded(bondAmount) && (
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                        <div className="flex items-center">
+                          <div className="text-yellow-800 dark:text-yellow-200">
+                            <svg className="w-5 h-5 mr-2 inline" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                            Approval required: You need to approve {bondAmount || "0"} MBT for spending
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
                     {purchaseError && (
-                      <p className="text-red-600 dark:text-red-400 text-sm">{purchaseError}</p>
+                      <div className="bg-red-50 dark:bg-red-900/20 p-3 rounded-lg border border-red-200 dark:border-red-800">
+                        <p className="text-red-600 dark:text-red-400 text-sm">{purchaseError}</p>
+                      </div>
                     )}
-                    {writeError && (
-                      <p className="text-red-600 dark:text-red-400 text-sm">Error: {writeError.message}</p>
+
+                    {isApproving && (
+                      <div className="bg-blue-50 dark:bg-blue-900/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                        <p className="text-blue-600 dark:text-blue-400 text-sm">Approving MBT tokens...</p>
+                      </div>
                     )}
-                    {isPending && (
-                      <p className="text-yellow-600 dark:text-yellow-400 text-sm">Transaction pending...</p>
+
+                    {isApprovePending && (
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                        <p className="text-yellow-600 dark:text-yellow-400 text-sm">Approval transaction pending...</p>
+                      </div>
                     )}
-                    {isSuccess && (
-                      <p className="text-green-600 dark:text-green-400 text-sm">Purchase successful!</p>
+
+                    {isPurchasePending && (
+                      <div className="bg-yellow-50 dark:bg-yellow-900/20 p-3 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                        <p className="text-yellow-600 dark:text-yellow-400 text-sm">Purchase transaction pending...</p>
+                      </div>
                     )}
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      By proceeding, you agree to complete KYC/AML verification and receive digital bond tokens upon payment.
-                    </p>
+
+                    {isApproveSuccess && !isPurchaseSuccess && (
+                      <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                        <p className="text-green-600 dark:text-green-400 text-sm">Approval successful! You can now purchase bonds.</p>
+                      </div>
+                    )}
+
+                    {isPurchaseSuccess && (
+                      <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
+                        <p className="text-green-600 dark:text-green-400 text-sm">Purchase successful! Bonds have been added to your portfolio.</p>
+                      </div>
+                    )}
+
+                    <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
+                      <p className="mb-1">
+                        <strong>Important:</strong> By proceeding, you agree to:
+                      </p>
+                      <ul className="list-disc list-inside space-y-1">
+                        <li>Complete KYC/AML verification if required</li>
+                        <li>Receive digital bond tokens upon successful payment</li>
+                        <li>Terms and conditions of the bond purchase agreement</li>
+                      </ul>
+                    </div>
                   </>
                 )}
               </div>
+              
               {isConnected && (
                 <DialogFooter>
                   <Button
                     variant="outline"
                     className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-300 border-none"
-                    onClick={() => setIsPurchaseModalOpen(false)}
+                    onClick={() => {
+                      setIsPurchaseModalOpen(false);
+                      setPurchaseError("");
+                    }}
+                    disabled={isApprovePending || isPurchasePending}
                   >
                     Cancel
                   </Button>
                   <Button
                     className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
                     onClick={handlePurchase}
-                    disabled={isPending || !selectedFarmId || !bondAmount}
+                    disabled={
+                      isApprovePending || 
+                      isPurchasePending || 
+                      isApproving ||
+                      !selectedFarmId || 
+                      !bondAmount || 
+                      parseInt(bondAmount) < 1 ||
+                      parseInt(bondAmount) + totalBondsOwned > MAX_BONDS_PER_INVESTOR
+                    }
                   >
-                    Purchase Bonds
+                    {isApprovePending || isPurchasePending || isApproving 
+                      ? "Processing..." 
+                      : isApprovalNeeded(bondAmount) 
+                        ? `Approve & Purchase ${bondAmount || "0"} Bonds`
+                        : `Purchase ${bondAmount || "0"} Bonds`
+                    }
                   </Button>
                 </DialogFooter>
               )}
@@ -550,5 +829,5 @@ export default function Marketplace() {
         </div>
       </div>
     </div>
-  )
+  );
 }

@@ -91,7 +91,7 @@ export default function Dashboard() {
   const filteredFarms = farms
     .filter(({ config }) => {
       if (!config) return false
-      if (marketTab === "Active") return config.isActive
+      if (marketTab === "Active") return config.active
       return true
     })
     .filter(({ config }) => {
@@ -494,7 +494,7 @@ export default function Dashboard() {
                   <TabsTrigger value="Active">
                     Active
                     <span className="ml-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                      {farms.filter(({ config }) => config?.isActive).length}
+                      {farms.filter(({ config }) => config?.active).length}
                     </span>
                   </TabsTrigger>
                 </TabsList>
@@ -575,7 +575,7 @@ export default function Dashboard() {
                             <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
                               {error ? (
                                 <span className="text-red-600 dark:text-red-400">Error</span>
-                              ) : config.isActive ? (
+                              ) : config.active ? (
                                 <span className="text-green-600 dark:text-green-400">Active</span>
                               ) : (
                                 <span className="text-gray-500 dark:text-gray-400">Inactive</span>
@@ -584,7 +584,7 @@ export default function Dashboard() {
                             <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
                               <Button
                                 className="bg-[#7A5540] hover:bg-[#6A4A36] text-white"
-                                disabled={error || !config.isActive}
+                                disabled={error || !config.active}
                                 onClick={() => {
                                   setSelectedFarmId(farmId.toString());
                                   setIsPurchaseModalOpen(true);
@@ -617,7 +617,7 @@ export default function Dashboard() {
                     </SelectTrigger>
                     <SelectContent>
                       {farms
-                        .filter(({ config }) => config?.isActive)
+                        .filter(({ config }) => config?.active)
                         .map(({ farmId, config }) => (
                           <SelectItem key={farmId.toString()} value={farmId.toString()}>
                             {config?.name} ({config?.shareTokenSymbol})
