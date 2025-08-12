@@ -15,11 +15,11 @@ import vault from "@/ABI/MochaTreeRightsABI.json"
 
 const MOCHA_TREE_CONTRACT_ADDRESS = "0x4b02Bada976702E83Cf91Cd0B896852099099352";
 const MOCHA_TREE_CONTRACT_ABI = vault.abi;
-const BOND_PRICE_USD = 100; // $100 per bond
+const BOND_PRICE_USD = 100;
 const MAX_BONDS_PER_INVESTOR = 20;
 
 export default function Marketplace() {
-  const { address: userAddress } = useAccount()
+  const { address: userAddress, isConnected } = useAccount()
   const [marketTab, setMarketTab] = useState("All")
   const [sortBy, setSortBy] = useState("name")
   const [sortOrder, setSortOrder] = useState("asc")
@@ -30,8 +30,9 @@ export default function Marketplace() {
   const [selectedFarmName, setSelectedFarmName] = useState("")
   const [bondAmount, setBondAmount] = useState("1")
   const [purchaseError, setPurchaseError] = useState("")
+  const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false)
+  const [selectedFarmData, setSelectedFarmData] = useState(null)
 
-  // Fetch contract data
   const { data: activeFarmIds, isLoading: isLoadingActiveFarmIds, error: activeFarmIdsError } = useReadContract({
     address: MOCHA_TREE_CONTRACT_ADDRESS,
     abi: MOCHA_TREE_CONTRACT_ABI,
@@ -39,7 +40,6 @@ export default function Marketplace() {
     chainId: scrollSepolia.id,
   });
 
-  // Batch fetch farm configurations
   const farmConfigContracts = activeFarmIds
     ? activeFarmIds.map((farmId) => ({
         address: MOCHA_TREE_CONTRACT_ADDRESS,
@@ -54,7 +54,6 @@ export default function Marketplace() {
     contracts: farmConfigContracts,
   });
 
-  // Fetch user balances for each farm's share token (MABB)
   const balanceContracts = farmConfigsData
     ? farmConfigsData.map((result, index) => ({
         address: result.status === 'success' ? result.result.shareTokenAddress : MOCHA_TREE_CONTRACT_ADDRESS,
@@ -67,15 +66,15 @@ export default function Marketplace() {
 
   const { data: balanceData, isLoading: isLoadingBalances, error: balanceError } = useReadContracts({
     contracts: balanceContracts,
+    query: { enabled: isConnected },
   });
 
-  // Fetch user's ETH balance
   const { data: ethBalance } = useBalance({
     address: userAddress,
     chainId: scrollSepolia.id,
+    query: { enabled: isConnected },
   });
 
-  // Process farm and balance data
   const farms = farmConfigsData
     ? farmConfigsData.map((result, index) => ({
         farmId: activeFarmIds[index],
@@ -85,14 +84,12 @@ export default function Marketplace() {
       }))
     : [];
 
-  // Calculate total bonds owned
   const totalBondsOwned = farms.reduce((sum, { balance }) => sum + Number(balance), 0);
 
-  // Filter and sort farms
   const filteredFarms = farms
     .filter(({ data }) => {
       if (!data) return false
-      if (marketTab === "Active") return data.isActive
+      if (marketTab === "Active") return data.active
       return true
     })
     .filter(({ data }) => {
@@ -124,14 +121,17 @@ export default function Marketplace() {
       return sortOrder === "asc" ? comparison : -comparison
     })
 
-  // Purchase bond functionality
   const { writeContract, isPending, isSuccess, error: writeError } = useWriteContract();
 
   const handlePurchase = async () => {
+    if (!isConnected) {
+      setPurchaseError("Please connect your wallet");
+      return;
+    }
+
     setPurchaseError("");
     const amount = parseInt(bondAmount);
 
-    // Validate inputs
     if (!selectedFarmId) {
       setPurchaseError("No farm selected");
       return;
@@ -144,8 +144,8 @@ export default function Marketplace() {
       setPurchaseError(`Cannot exceed ${MAX_BONDS_PER_INVESTOR} bonds per investor`);
       return;
     }
-    const totalCostEth = parseEther((amount * BOND_PRICE_USD / 1000).toString()); // Assuming 1 ETH = $1000
-    if (ethBalance && BigInt(ethBalance.value) < totalCostEth) {
+    const totalCost = parseEther((amount * BOND_PRICE_USD / 1000).toString());
+    if (ethBalance && BigInt(ethBalance.value) < totalCost) {
       setPurchaseError("Insufficient ETH balance");
       return;
     }
@@ -156,11 +156,36 @@ export default function Marketplace() {
         abi: MOCHA_TREE_CONTRACT_ABI,
         functionName: 'purchaseBond',
         args: [BigInt(selectedFarmId), BigInt(amount)],
-        value: totalCostEth,
+        value: totalCost,
       });
     } catch (err) {
       setPurchaseError("Transaction failed");
     }
+  };
+
+  const handleConnectWallet = () => {
+    // Assuming Openfort SDK is globally available or imported
+    if (typeof openfort !== 'undefined') {
+      openfort.connect();
+    } else {
+      console.error("Openfort SDK not loaded");
+      setPurchaseError("Wallet connection failed. Please try again.");
+    }
+  };
+
+  const handleBuyBondsClick = (farmId: string, farmName: string) => {
+    if (!isConnected) {
+      handleConnectWallet();
+    } else {
+      setSelectedFarmId(farmId);
+      setSelectedFarmName(farmName);
+      setIsPurchaseModalOpen(true);
+    }
+  };
+
+  const handleRowClick = (farm) => {
+    setSelectedFarmData(farm);
+    setIsDetailsModalOpen(true);
   };
 
   useEffect(() => {
@@ -195,7 +220,6 @@ export default function Marketplace() {
     setSortOrder(sortOrder === "asc" ? "desc" : "asc")
   }
 
-  // Truncate addresses for display
   const truncateAddress = (address) => {
     if (!address) return "N/A"
     return `${address.slice(0, 6)}...${address.slice(-4)}`
@@ -219,17 +243,17 @@ export default function Marketplace() {
               />
               <Input
                 placeholder="Search farms..."
-                className="pl-10 bg-white dark:bg-gray-800 border dark:border-gray-700"
+                className="pl-10 bg-white dark:bg-gray-800 border-none"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
             <div className="flex items-center gap-2 w-full md:w-auto">
               <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px] bg-white dark:bg-gray-800 border dark:border-gray-700">
+                <SelectTrigger className="w-[180px] bg-white dark:bg-gray-800 border-none">
                   <SelectValue placeholder="Sort by" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="border-none bg-white dark:bg-gray-800">
                   <SelectItem value="id">Farm ID</SelectItem>
                   <SelectItem value="name">Name</SelectItem>
                   <SelectItem value="bonds">Bond Count</SelectItem>
@@ -240,11 +264,11 @@ export default function Marketplace() {
                 variant="outline"
                 size="icon"
                 onClick={toggleSortOrder}
-                className="bg-white dark:bg-gray-800 border dark:border-gray-700"
+                className="bg-white dark:bg-gray-800 border-none"
               >
                 {sortOrder === "asc" ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
               </Button>
-              <Button variant="outline" className="bg-white dark:bg-gray-800 border dark:border-gray-700">
+              <Button variant="outline" className="bg-white dark:bg-gray-800 border-none">
                 <Filter size={18} className="mr-2" />
                 Filters
               </Button>
@@ -252,12 +276,12 @@ export default function Marketplace() {
           </div>
 
           <Tabs defaultValue="All" className="mb-6" value={marketTab} onValueChange={setMarketTab}>
-            <TabsList className="bg-gray-100 dark:bg-gray-800">
+            <TabsList className="bg-gray-100 dark:bg-gray-800 border-none">
               <TabsTrigger value="All">All</TabsTrigger>
               <TabsTrigger value="Active">
                 Active
                 <span className="ml-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">
-                  {farms.filter(({ data }) => data?.isActive).length}
+                  {farms.filter(({ data }) => data?.active).length}
                 </span>
               </TabsTrigger>
             </TabsList>
@@ -313,7 +337,8 @@ export default function Marketplace() {
                   filteredFarms.map(({ farmId, data, error }, index) => (
                     <tr
                       key={farmId.toString()}
-                      className="border-b dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                      className="border-b dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors cursor-pointer"
+                      onClick={() => handleRowClick({ farmId, data, error })}
                     >
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{index + 1}</td>
                       <td className="px-4 py-4 whitespace-nowrap">
@@ -322,7 +347,7 @@ export default function Marketplace() {
                         ) : (
                           <div className="flex items-center">
                             <div className="text-sm font-medium text-gray-900 dark:text-white">{data.name}</div>
-                            <div className="ml-2 text-sm text-gray-500 dark:text-gray-400">({data.shareTokenSymbol})</div>
+                            {/* <div className="ml-2 text-sm text-gray-500 dark:text-gray-400">({data.shareTokenSymbol})</div> */}
                           </div>
                         )}
                       </td>
@@ -338,23 +363,19 @@ export default function Marketplace() {
                       <td className="px-4 py-4 whitespace-nowrap text-right text-sm">
                         {error ? (
                           <span className="text-red-600 dark:text-red-400">Error</span>
-                        ) : data.isActive ? (
+                        ) : data.active ? (
                           <span className="text-green-600 dark:text-green-400">Active</span>
                         ) : (
                           <span className="text-gray-500 dark:text-gray-400">Inactive</span>
                         )}
                       </td>
-                      <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+                      <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                         <Button
-                          className="bg-[#7A5540] hover:bg-[#6A4A36] text-white"
-                        //   disabled={error || !data.isActive}
-                          onClick={() => {
-                            setSelectedFarmId(farmId.toString());
-                            setSelectedFarmName(data.name);
-                            setIsPurchaseModalOpen(true);
-                          }}
+                          className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
+                          disabled={error || !data.active}
+                          onClick={() => handleBuyBondsClick(farmId.toString(), data.name)}
                         >
-                          Buy Bonds
+                          {isConnected ? "Buy Bonds" : "Connect Wallet"}
                         </Button>
                       </td>
                     </tr>
@@ -364,63 +385,166 @@ export default function Marketplace() {
             </table>
           </div>
 
+          {/* Farm Details Popup */}
+          <Dialog open={isDetailsModalOpen} onOpenChange={setIsDetailsModalOpen}>
+            <DialogContent className="bg-gray-50 dark:bg-gray-800 border-none max-w-[700px] p-6">
+              <DialogHeader>
+                <DialogTitle className="text-xl font-bold dark:text-white">
+                  {selectedFarmData?.data?.name || "Farm"} Details
+                </DialogTitle>
+              </DialogHeader>
+              {selectedFarmData?.error || !selectedFarmData?.data ? (
+                <div className="text-center text-red-600 dark:text-red-400 p-6">
+                  Error loading farm details
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Map Placeholder */}
+                  <div className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg text-center w-full h-[400px] flex items-center justify-center">
+                    <div>
+                      <h2 className="text-lg font-semibold dark:text-white mb-2">Farm Location</h2>
+                      <p className="text-gray-500 dark:text-gray-400">Map Coming Soon</p>
+                    </div>
+                  </div>
+
+                  {/* Farm Information */}
+                  <div className="p-4 rounded-lg">
+                    <h2 className="text-lg font-semibold dark:text-white mb-3">Farm Information</h2>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Farm Name</p>
+                        <p className="text-base dark:text-white">{selectedFarmData.data.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Owner</p>
+                        <p className="text-base dark:text-white">{truncateAddress(selectedFarmData.data.farmOwner)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Bond Count</p>
+                        <p className="text-base dark:text-white">{selectedFarmData.data.treeCount.toString()}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Annual Interest</p>
+                        <p className="text-base dark:text-white">${Number(selectedFarmData.data.treeCount) * 10}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Status</p>
+                        <p className="text-base dark:text-white">
+                          {selectedFarmData.data.active ? (
+                            <span className="text-green-600 dark:text-green-400">Active</span>
+                          ) : (
+                            <span className="text-gray-500 dark:text-gray-400">Inactive</span>
+                          )}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">Share Token Symbol</p>
+                        <p className="text-base dark:text-white">{selectedFarmData.data.shareTokenSymbol}</p>
+                      </div>
+                    </div>
+                    <div className="mt-4">
+                      <Button
+                        className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
+                        disabled={!selectedFarmData.data.active}
+                        onClick={() => {
+                          setIsDetailsModalOpen(false);
+                          handleBuyBondsClick(selectedFarmData.farmId.toString(), selectedFarmData.data.name);
+                        }}
+                      >
+                        {isConnected ? "Buy Bonds" : "Connect Wallet"}
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <DialogFooter>
+                <Button
+                  variant="outline"
+                  className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-300 border-none"
+                  onClick={() => setIsDetailsModalOpen(false)}
+                >
+                  Close
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          {/* Purchase Bonds Popup */}
           <Dialog open={isPurchaseModalOpen} onOpenChange={setIsPurchaseModalOpen}>
-            <DialogContent className="bg-gray-50 dark:bg-gray-800 border dark:border-gray-700">
+            <DialogContent className="bg-gray-50 dark:bg-gray-800 border-none p-6">
               <DialogHeader>
                 <DialogTitle className="text-xl font-bold dark:text-white">
                   Purchase Bonds for {selectedFarmName || "Selected Farm"}
                 </DialogTitle>
               </DialogHeader>
               <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Number of Bonds (1–20)</label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="20"
-                    value={bondAmount}
-                    onChange={(e) => setBondAmount(e.target.value)}
-                    className="bg-white dark:bg-gray-800 border dark:border-gray-700"
-                  />
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Cost</label>
-                  <p className="text-lg font-medium dark:text-white">
-                    ${parseInt(bondAmount || "0") * BOND_PRICE_USD}.00 (~{parseFloat(formatEther(parseEther((parseInt(bondAmount || "0") * BOND_PRICE_USD / 1000).toString()))).toFixed(4)} ETH)
-                  </p>
-                </div>
-                {purchaseError && (
-                  <p className="text-red-600 dark:text-red-400 text-sm">{purchaseError}</p>
+                {!isConnected ? (
+                  <div className="text-center">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                      Please connect your wallet to purchase bonds.
+                    </p>
+                    <Button
+                      className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
+                      onClick={handleConnectWallet}
+                    >
+                      Connect Wallet
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Number of Bonds (1–20)</label>
+                      <Input
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={bondAmount}
+                        onChange={(e) => setBondAmount(e.target.value)}
+                        className="bg-white dark:bg-gray-800 border-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Cost</label>
+                      <p className="text-base font-medium dark:text-white">
+                        ${parseInt(bondAmount || "0") * BOND_PRICE_USD}.00 (~{parseFloat(formatEther(parseEther((parseInt(bondAmount || "0") * BOND_PRICE_USD / 1000).toString()))).toFixed(4)} ETH)
+                      </p>
+                    </div>
+                    {purchaseError && (
+                      <p className="text-red-600 dark:text-red-400 text-sm">{purchaseError}</p>
+                    )}
+                    {writeError && (
+                      <p className="text-red-600 dark:text-red-400 text-sm">Error: {writeError.message}</p>
+                    )}
+                    {isPending && (
+                      <p className="text-yellow-600 dark:text-yellow-400 text-sm">Transaction pending...</p>
+                    )}
+                    {isSuccess && (
+                      <p className="text-green-600 dark:text-green-400 text-sm">Purchase successful!</p>
+                    )}
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      By proceeding, you agree to complete KYC/AML verification and receive digital bond tokens upon payment.
+                    </p>
+                  </>
                 )}
-                {writeError && (
-                  <p className="text-red-600 dark:text-red-400 text-sm">Error: {writeError.message}</p>
-                )}
-                {isPending && (
-                  <p className="text-yellow-600 dark:text-yellow-400 text-sm">Transaction pending...</p>
-                )}
-                {isSuccess && (
-                  <p className="text-green-600 dark:text-green-400 text-sm">Purchase successful!</p>
-                )}
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  By proceeding, you agree to complete KYC/AML verification and receive digital bond tokens upon payment.
-                </p>
               </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  className="dark:border-gray-600 dark:text-gray-300"
-                  onClick={() => setIsPurchaseModalOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  className="bg-[#7A5540] hover:bg-[#6A4A36] text-white"
-                  onClick={handlePurchase}
-                  disabled={isPending || !selectedFarmId || !bondAmount}
-                >
-                  Purchase Bonds
-                </Button>
-              </DialogFooter>
+              {isConnected && (
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-300 border-none"
+                    onClick={() => setIsPurchaseModalOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
+                    onClick={handlePurchase}
+                    disabled={isPending || !selectedFarmId || !bondAmount}
+                  >
+                    Purchase Bonds
+                  </Button>
+                </DialogFooter>
+              )}
             </DialogContent>
           </Dialog>
         </div>

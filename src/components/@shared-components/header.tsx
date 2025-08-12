@@ -14,7 +14,7 @@ const NAV_LINKS = [
   { label: "Dashboard", href: "/", enabled: true },
   { label: "Marketplace", href: "/marketplace", enabled: true },
   { label: "Staking", href: "/staking", enabled: false },
-  { label: "Yield", href: "/yield", enabled: false },
+  { label: "Investments", href: "/investments", enabled: true },
 ]
 
 export default function Header() {
