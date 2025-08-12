@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react"
 import {
-  ChevronDown,
   Moon,
   Sun,
 } from "lucide-react"
@@ -18,7 +17,7 @@ const NAV_LINKS = [
 ]
 
 export default function Header() {
-    const [darkMode, setDarkMode] = useState(true)
+    const [darkMode, setDarkMode] = useState(false)
     const pathname = usePathname()
 
     useEffect(() => {
@@ -42,14 +41,15 @@ export default function Header() {
     }
 
     return (
-      <div className="fixed top-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-b dark:border-gray-800">
-        <div className="mx-auto flex items-center justify-between p-4">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-brown-800 dark:bg-amber-700 rounded-md flex items-center justify-center">
-              <div className="w-4 h-4 bg-white rounded-sm"></div>
-            </div>
-            <span className="font-bold text-xl dark:text-white">Project Mocha</span>
-          </div>
+      <div className="fixed top-0 left-0 right-0 z-50 bg-[transparent] dark:bg-[transparent]">
+        <div className="mx-auto flex items-center justify-between py-4 px-12">
+          <Image
+            src={darkMode ? "/Brand/mocha-white.svg" : "/Brand/mocha-brown.png"}
+            alt="Project Logo"
+            width={78}
+            height={78}
+            className="object-fit"
+          />
 
           <div className="flex items-center space-x-6">
             <nav className="border dark:border-gray-800 bg-white dark:bg-gray-800 bg-gray-300 rounded-full px-6 py-2">
@@ -58,7 +58,7 @@ export default function Header() {
                   <Link key={link.label} href={link.href}>
                     <button
                       className={`px-4 py-1.5 rounded-full flex items-center transition-colors
-                        ${pathname === link.href ? "text-black dark:text-white font-semibold" : "text-gray-400 hover:text-gray-200"}`}
+                        ${pathname === link.href ? "text-[#522912] dark:text-white font-semibold" : "text-gray-400 hover:text-[#522912]"}`}
                     >
                       {link.label}
                       {/* {link.label === "Dashboard" && <ChevronDown className="ml-1.5 w-4 h-4" />} */}

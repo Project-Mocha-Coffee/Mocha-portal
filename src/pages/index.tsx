@@ -13,6 +13,7 @@ import { scrollSepolia } from "viem/chains"
 import Header from "@/components/@shared-components/header"
 import { useRouter } from 'next/router'
 import vault from "@/ABI/MochaTreeRightsABI.json"
+import StatCard from "@/components/@shared-components/statCard"
 
 const MOCHA_TREE_CONTRACT_ADDRESS = "0x4b02Bada976702E83Cf91Cd0B896852099099352";
 const MOCHA_TREE_CONTRACT_ABI = vault.abi;
@@ -128,6 +129,31 @@ export default function Dashboard() {
   const annualInterest = totalBondsOwned * 10; // 10% of $100 per bond
   const cumulativeReturn = annualInterest * 5; // 5-year term
 
+  // Define stat cards data
+  const statCards = [
+    {
+      title: "Total Bonds Owned",
+      value: `${totalBondsOwned} Bonds`,
+      isLoading: isLoadingBalances || isLoadingFarmConfigs,
+      iconColor: "green",
+      icon: "Coffee",
+    },
+    {
+      title: "Annual Interest",
+      value: `$ ${annualInterest.toFixed(2)}`,
+      isLoading: isLoadingBalances || isLoadingFarmConfigs,
+      iconColor: "red",
+      icon: "DollarSign",
+    },
+    {
+      title: "Cumulative Return",
+      value: `$ ${cumulativeReturn.toFixed(2)}`,
+      isLoading: isLoadingBalances || isLoadingFarmConfigs,
+      iconColor: "yellow",
+      icon: "TrendingUp",
+    },
+  ];
+
   // Purchase bond functionality
   const { writeContract, isPending, isSuccess, error: writeError } = useWriteContract();
 
@@ -201,7 +227,6 @@ export default function Dashboard() {
     return router.pathname === `/${path.toLowerCase()}`
   }
 
-  // Truncate addresses for display
   const truncateAddress = (address) => {
     if (!address) return "N/A"
     return `${address.slice(0, 6)}...${address.slice(-4)}`
@@ -212,13 +237,13 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200 text-gray-900 dark:text-white">
+    <div className="min-h-screen bg-[#E6E6E6] dark:bg-gray-900 transition-colors duration-200 text-gray-900 dark:text-white">
       <Header />
       <div className="pt-[72px]">
-        <div className="px-6 py-8">
+        <div className="px-12 py-8">
           <div className="mb-4">
             <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">MOCHA ASSET-BACKED BONDS</div>
-            <h1 className="text-3xl font-bold dark:text-white">Mocha Asset-Backed Bonds Dashboard</h1>
+            <h1 className="text-3xl font-bold dark:text-white"> Dashboard</h1>
           </div>
 
           <div className="flex items-center justify-between border-b dark:border-gray-800">
@@ -263,45 +288,16 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 py-6">
             <div className="lg:col-span-2 grid gap-6">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="border dark:border-gray-800 rounded-lg p-4 bg-white dark:bg-gray-800">
-                  <div className="flex items-center mb-2">
-                    <div className="w-8 h-8 rounded-full bg-[#7A5540] dark:bg-amber-700 flex items-center justify-center mr-2">
-                      <div className="w-4 h-4 rounded-full border-2 border-white"></div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">Total Bonds Owned</div>
-                      <div className="font-medium dark:text-white">
-                        {isLoadingBalances || isLoadingFarmConfigs ? "Loading..." : `${totalBondsOwned} Bonds`}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="border dark:border-gray-800 rounded-lg p-4 bg-white dark:bg-gray-800">
-                  <div className="flex items-center mb-2">
-                    <div className="w-8 h-8 rounded-full bg-white dark:bg-gray-700 border dark:border-gray-600 flex items-center justify-center mr-2">
-                      <div className="w-5 h-5 rounded-full border-2 border-amber-600 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-amber-600"></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">Annual Interest</div>
-                      <div className="font-medium dark:text-white">${annualInterest.toFixed(2)}</div>
-                    </div>
-                  </div>
-                </div>
-                <div className="border dark:border-gray-800 rounded-lg p-4 bg-white dark:bg-gray-800">
-                  <div className="flex items-center mb-2">
-                    <div className="w-8 h-8 rounded-full bg-white dark:bg-gray-700 border dark:border-gray-600 flex items-center justify-center mr-2">
-                      <div className="w-5 h-5 rounded-full border-2 border-amber-600 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-amber-600"></div>
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">Cumulative Return</div>
-                      <div className="font-medium dark:text-white">${cumulativeReturn.toFixed(2)}</div>
-                    </div>
-                  </div>
-                </div>
+                {statCards.map((card, index) => (
+                  <StatCard
+                    key={index}
+                    title={card.title}
+                    value={card.value}
+                    isLoading={card.isLoading}
+                    iconColor={card.iconColor}
+                    icon={card.icon}
+                  />
+                ))}
               </div>
 
               {overviewTab === "Overview" && (
