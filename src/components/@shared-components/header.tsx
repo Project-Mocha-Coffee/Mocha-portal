@@ -61,7 +61,7 @@ export default function Header() {
                         ${pathname === link.href ? "text-black dark:text-white font-semibold" : "text-gray-400 hover:text-gray-200"}`}
                     >
                       {link.label}
-                      {link.label === "Dashboard" && <ChevronDown className="ml-1.5 w-4 h-4" />}
+                      {/* {link.label === "Dashboard" && <ChevronDown className="ml-1.5 w-4 h-4" />} */}
                     </button>
                   </Link>
                 ))}

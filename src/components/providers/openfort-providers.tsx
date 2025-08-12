@@ -25,8 +25,8 @@ const walletConfig: OpenfortWalletConfig = {
 
 const authProviders: AuthProvider[] = [
   AuthProvider.WALLET,
-  AuthProvider.GOOGLE,
-  AuthProvider.TWITTER,
+  // AuthProvider.GOOGLE,
+  // AuthProvider.TWITTER,
 ]
 
 export function Providers({ children }: { children?: React.ReactNode }) {

@@ -19,10 +19,9 @@ import Header from "@/components/@shared-components/header"
 
 const MOCHA_TREE_CONTRACT_ADDRESS = "0x4b02Bada976702E83Cf91Cd0B896852099099352";
 const MOCHA_TREE_CONTRACT_ABI = vault.abi;
-const ETH_PRICE_USD = 1000; // 1 ETH = $1000
-const EARLY_REDEMPTION_PENALTY = 0.2; // 20% penalty
+const ETH_PRICE_USD = 1000; 
+const EARLY_REDEMPTION_PENALTY = 0.2; 
 
-// Mock monthly returns for chart
 const monthlyReturns = [
   { month: "Jan", return: 0.05 },
   { month: "Feb", return: 0.08 },
