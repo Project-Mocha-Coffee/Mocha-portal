@@ -1,138 +1,110 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronDown, Search, Filter, Star, ArrowUp, ArrowDown, Moon, Sun } from "lucide-react"
+import { Search, Filter, ArrowUp, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import Image from "next/image"
-import Link from "next/link"
 import Header from "@/components/@shared-components/header"
+import { useReadContract, useReadContracts } from "wagmi"
+import { scrollSepolia } from "viem/chains"
+import vault from "@/ABI/MochaTreeRightsABI.json"
 
-// Sample token data
-const tokens = [
-  {
-    id: 1,
-    name: "Nyeri Highland Coffee",
-    symbol: "NHC",
-    price: 0.1,
-    change: 5.2,
-    volume: 12500,
-    marketCap: 250000,
-    image: "/placeholder.svg?height=40&width=40",
-    verified: true,
-    hot: true,
-  },
-  {
-    id: 2,
-    name: "Mount Kenya Collective",
-    symbol: "MKC",
-    price: 0.05,
-    change: -2.1,
-    volume: 8300,
-    marketCap: 120000,
-    image: "/placeholder.svg?height=40&width=40",
-    verified: true,
-    hot: false,
-  },
-  {
-    id: 3,
-    name: "Rift Valley Estate",
-    symbol: "RVE",
-    price: 0.15,
-    change: 8.7,
-    volume: 15600,
-    marketCap: 300000,
-    image: "/placeholder.svg?height=40&width=40",
-    verified: true,
-    hot: true,
-  },
-  {
-    id: 4,
-    name: "Nairobi Highlands",
-    symbol: "NBH",
-    price: 0.08,
-    change: 1.3,
-    volume: 5200,
-    marketCap: 160000,
-    image: "/placeholder.svg?height=40&width=40",
-    verified: false,
-    hot: false,
-  },
-  {
-    id: 5,
-    name: "Meru Plantation",
-    symbol: "MPL",
-    price: 0.12,
-    change: -0.8,
-    volume: 9100,
-    marketCap: 240000,
-    image: "/placeholder.svg?height=40&width=40",
-    verified: true,
-    hot: false,
-  },
-  {
-    id: 6,
-    name: "Machakos Sustainable",
-    symbol: "MSF",
-    price: 0.07,
-    change: 3.5,
-    volume: 6800,
-    marketCap: 140000,
-    image: "/placeholder.svg?height=40&width=40",
-    verified: false,
-    hot: false,
-  },
-  {
-    id: 7,
-    name: "Kiambu Organic",
-    symbol: "KOF",
-    price: 0.09,
-    change: 6.2,
-    volume: 7500,
-    marketCap: 180000,
-    image: "/placeholder.svg?height=40&width=40",
-    verified: true,
-    hot: true,
-  },
-  {
-    id: 8,
-    name: "Kisii Highlands",
-    symbol: "KHL",
-    price: 0.06,
-    change: -1.5,
-    volume: 4200,
-    marketCap: 120000,
-    image: "/placeholder.svg?height=40&width=40",
-    verified: false,
-    hot: false,
-  },
-]
+const MOCHA_TREE_CONTRACT_ADDRESS = "0x4b02Bada976702E83Cf91Cd0B896852099099352";
+const MOCHA_TREE_CONTRACT_ABI = vault.abi;
 
 export default function Marketplace() {
-  const [activeTab, setActiveTab] = useState("Marketplace")
   const [marketTab, setMarketTab] = useState("All")
-  const [sortBy, setSortBy] = useState("volume")
-  const [sortOrder, setSortOrder] = useState("desc")
+  const [sortBy, setSortBy] = useState("name")
+  const [sortOrder, setSortOrder] = useState("asc")
   const [searchQuery, setSearchQuery] = useState("")
   const [darkMode, setDarkMode] = useState(false)
 
-  // Initialize dark mode from localStorage or system preference
+  // Fetch contract data
+  const { data: name, isLoading: isLoadingName, error: nameError } = useReadContract({
+    address: MOCHA_TREE_CONTRACT_ADDRESS,
+    abi: MOCHA_TREE_CONTRACT_ABI,
+    functionName: 'name',
+    chainId: scrollSepolia.id,
+  });
+
+  const { data: symbol, isLoading: isLoadingSymbol, error: symbolError } = useReadContract({
+    address: MOCHA_TREE_CONTRACT_ADDRESS,
+    abi: MOCHA_TREE_CONTRACT_ABI,
+    functionName: 'symbol',
+    chainId: scrollSepolia.id,
+  });
+
+  const { data: totalFarms, isLoading: isLoadingTotalFarms, error: totalFarmsError } = useReadContract({
+    address: MOCHA_TREE_CONTRACT_ADDRESS,
+    abi: MOCHA_TREE_CONTRACT_ABI,
+    functionName: 'totalFarms',
+    chainId: scrollSepolia.id,
+  });
+
+  const { data: totalShareTokens, isLoading: isLoadingTotalShareTokens, error: totalShareTokensError } = useReadContract({
+    address: MOCHA_TREE_CONTRACT_ADDRESS,
+    abi: MOCHA_TREE_CONTRACT_ABI,
+    functionName: 'totalShareTokens',
+    chainId: scrollSepolia.id,
+  });
+
+  const { data: mochaTreeToken, isLoading: isLoadingMochaTreeToken, error: mochaTreeTokenError } = useReadContract({
+    address: MOCHA_TREE_CONTRACT_ADDRESS,
+    abi: MOCHA_TREE_CONTRACT_ABI,
+    functionName: 'mochaTreeToken',
+    chainId: scrollSepolia.id,
+  });
+
+  const { data: mochaLandToken, isLoading: isLoadingMochaLandToken, error: mochaLandTokenError } = useReadContract({
+    address: MOCHA_TREE_CONTRACT_ADDRESS,
+    abi: MOCHA_TREE_CONTRACT_ABI,
+    functionName: 'mochaLandToken',
+    chainId: scrollSepolia.id,
+  });
+
+  const { data: activeFarmIds, isLoading: isLoadingActiveFarmIds, error: activeFarmIdsError } = useReadContract({
+    address: MOCHA_TREE_CONTRACT_ADDRESS,
+    abi: MOCHA_TREE_CONTRACT_ABI,
+    functionName: 'getActiveFarmIds',
+    chainId: scrollSepolia.id,
+  });
+
+  // Batch fetch farm configurations
+  const farmConfigContracts = activeFarmIds
+    ? activeFarmIds.map((farmId:any) => ({
+        address: MOCHA_TREE_CONTRACT_ADDRESS,
+        abi: MOCHA_TREE_CONTRACT_ABI,
+        functionName: 'getFarmConfig',
+        args: [farmId],
+        chainId: scrollSepolia.id,
+      }))
+    : [];
+
+  const { data: farmConfigsData, isLoading: isLoadingFarmConfigs, error: farmConfigsError } = useReadContracts({
+    contracts: farmConfigContracts,
+  });
+
+  // Process farm configs data
+  const farms = farmConfigsData
+    ? farmConfigsData.map((result, index) => ({
+        farmId: activeFarmIds[index],
+        data: result.status === 'success' ? result.result : null,
+        error: result.status === 'failure' ? result.error : null,
+      }))
+    : [];
+
   useEffect(() => {
-    // Check localStorage first
     const savedMode = localStorage.getItem("darkMode")
     if (savedMode !== null) {
       setDarkMode(savedMode === "true")
     } else {
-      // Check system preference
       const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches
       setDarkMode(prefersDark)
     }
   }, [])
 
-  // Update body class and localStorage when dark mode changes
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add("dark")
@@ -146,43 +118,45 @@ export default function Marketplace() {
     setDarkMode(!darkMode)
   }
 
-  // Filter and sort tokens
-  const filteredTokens = tokens
-    .filter((token) => {
-      if (marketTab === "Hot") return token.hot
-      if (marketTab === "Verified") return token.verified
-      return true // "All" tab
+  // Truncate addresses for display
+  const truncateAddress = (address) => {
+    if (!address) return "N/A"
+    return `${address.slice(0, 6)}...${address.slice(-4)}`
+  }
+
+  // Filter and sort farms
+  const filteredFarms = farms
+    .filter(({ data }) => {
+      if (!data) return false
+      if (marketTab === "Active") return data.isActive
+      return true
     })
-    .filter((token) => {
-      if (!searchQuery) return true
+    .filter(({ data }) => {
+      if (!searchQuery || !data) return true
       return (
-        token.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        token.symbol.toLowerCase().includes(searchQuery.toLowerCase())
+        data.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        data.shareTokenSymbol.toLowerCase().includes(searchQuery.toLowerCase())
       )
     })
     .sort((a, b) => {
+      if (!a.data || !b.data) return 0
       let comparison = 0
-
       switch (sortBy) {
-        case "price":
-          comparison = a.price - b.price
+        case "id":
+          comparison = Number(a.farmId) - Number(b.farmId)
           break
         case "name":
-          comparison = a.name.localeCompare(b.name)
+          comparison = a.data.name.localeCompare(b.data.name)
           break
-        case "change":
-          comparison = a.change - b.change
+        case "trees":
+          comparison = Number(a.data.treeCount) - Number(b.data.treeCount)
           break
-        case "volume":
-          comparison = a.volume - b.volume
-          break
-        case "marketCap":
-          comparison = a.marketCap - b.marketCap
+        case "apy":
+          comparison = Number(a.data.targetAPY) - Number(b.data.targetAPY)
           break
         default:
-          comparison = a.volume - b.volume
+          comparison = a.data.name.localeCompare(b.data.name)
       }
-
       return sortOrder === "asc" ? comparison : -comparison
     })
 
@@ -196,231 +170,169 @@ export default function Marketplace() {
       <Header />
 
       {/* Main Content */}
-      <div className="py-8 px-4 md:px-8">
-        {/* Marketplace Header */}
-        <div className="mb-4">
-          <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">MARKETPLACE</div>
-          <h1 className="text-3xl font-bold dark:text-white">Coffee Tree Tokens</h1>
-        </div>
+	  <div className="pt-[72px]">
+		<div className="py-8 px-4 md:px-8">
+			{/* Contract Overview */}
+			<div className="mb-6">
+			<div className="text-xs text-gray-500 dark:text-gray-400 font-medium">MARKETPLACE</div>
+			<h1 className="text-3xl font-bold dark:text-white">Coffee Tree Farms</h1>
+			</div>
 
-        {/* Search and Filter Bar */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-          <div className="relative w-full md:w-96">
-            <Search
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"
-              size={18}
-            />
-            <Input
-              placeholder="Search tokens..."
-              className="pl-10 bg-white dark:bg-gray-800 border dark:border-gray-700"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+			{/* Search and Filter Bar */}
+			<div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+			<div className="relative w-full md:w-96">
+				<Search
+				className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500"
+				size={18}
+				/>
+				<Input
+				placeholder="Search farms..."
+				className="pl-10 bg-white dark:bg-gray-800 border dark:border-gray-700"
+				value={searchQuery}
+				onChange={(e) => setSearchQuery(e.target.value)}
+				/>
+			</div>
 
-          <div className="flex items-center gap-2 w-full md:w-auto">
-            <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-[180px] bg-white dark:bg-gray-800 border dark:border-gray-700">
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="price">Price</SelectItem>
-                <SelectItem value="name">Name</SelectItem>
-                <SelectItem value="change">24h Change</SelectItem>
-                <SelectItem value="volume">Volume</SelectItem>
-                <SelectItem value="marketCap">Market Cap</SelectItem>
-              </SelectContent>
-            </Select>
+			<div className="flex items-center gap-2 w-full md:w-auto">
+				<Select value={sortBy} onValueChange={setSortBy}>
+				<SelectTrigger className="w-[180px] bg-white dark:bg-gray-800 border dark:border-gray-700">
+					<SelectValue placeholder="Sort by" />
+				</SelectTrigger>
+				<SelectContent>
+					<SelectItem value="id">Farm ID</SelectItem>
+					<SelectItem value="name">Name</SelectItem>
+					<SelectItem value="trees">Tree Count</SelectItem>
+					<SelectItem value="apy">Target APY</SelectItem>
+				</SelectContent>
+				</Select>
 
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleSortOrder}
-              className="bg-white dark:bg-gray-800 border dark:border-gray-700"
-            >
-              {sortOrder === "asc" ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
-            </Button>
+				<Button
+				variant="outline"
+				size="icon"
+				onClick={toggleSortOrder}
+				className="bg-white dark:bg-gray-800 border dark:border-gray-700"
+				>
+				{sortOrder === "asc" ? <ArrowUp size={18} /> : <ArrowDown size={18} />}
+				</Button>
 
-            <Button variant="outline" className="bg-white dark:bg-gray-800 border dark:border-gray-700">
-              <Filter size={18} className="mr-2" />
-              Filters
-            </Button>
-          </div>
-        </div>
+				<Button variant="outline" className="bg-white dark:bg-gray-800 border dark:border-gray-700">
+				<Filter size={18} className="mr-2" />
+				Filters
+				</Button>
+			</div>
+			</div>
 
-        {/* Market Tabs */}
-        <Tabs defaultValue="All" className="mb-6" value={marketTab} onValueChange={setMarketTab}>
-          <TabsList className="bg-gray-100 dark:bg-gray-800">
-            <TabsTrigger value="All">All</TabsTrigger>
-            <TabsTrigger value="Hot">
-              Hot
-              <span className="ml-1 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full">3</span>
-            </TabsTrigger>
-            <TabsTrigger value="Verified">Verified</TabsTrigger>
-          </TabsList>
-        </Tabs>
+			{/* Market Tabs */}
+			<Tabs defaultValue="All" className="mb-6" value={marketTab} onValueChange={setMarketTab}>
+			<TabsList className="bg-gray-100 dark:bg-gray-800">
+				<TabsTrigger value="All">All</TabsTrigger>
+				<TabsTrigger value="Active">
+				Active
+				<span className="ml-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded-full">
+					{farms.filter(({ data }) => data?.isActive).length}
+				</span>
+				</TabsTrigger>
+			</TabsList>
+			</Tabs>
 
-        {/* Market Table */}
-        <div className="overflow-x-auto">
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="border-b dark:border-gray-800">
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  #
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Token
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Price
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  24h Change
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  24h Volume
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Market Cap
-                </th>
-                <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                  Action
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredTokens.map((token, index) => (
-                <tr
-                  key={token.id}
-                  className="border-b dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-                >
-                  <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{index + 1}</td>
-                  <td className="px-4 py-4 whitespace-nowrap">
-                    <div className="flex items-center">
-                      <div className="flex-shrink-0 h-10 w-10 relative">
-                        <Image src={token.image || "/placeholder.svg"} alt={token.name} fill className="rounded-full" />
-                        {token.verified && (
-                          <div className="absolute -right-1 -bottom-1 bg-blue-500 rounded-full p-0.5">
-                            <svg
-                              xmlns="http://www.w3.org/2000/svg"
-                              className="h-3 w-3 text-white"
-                              viewBox="0 0 20 20"
-                              fill="currentColor"
-                            >
-                              <path
-                                fillRule="evenodd"
-                                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                                clipRule="evenodd"
-                              />
-                            </svg>
-                          </div>
-                        )}
-                      </div>
-                      <div className="ml-4">
-                        <div className="flex items-center">
-                          <div className="text-sm font-medium text-gray-900 dark:text-white">{token.name}</div>
-                          {token.hot && (
-                            <Badge className="ml-2 bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
-                              <Star className="h-3 w-3 mr-1" /> Hot
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="text-sm text-gray-500 dark:text-gray-400">{token.symbol}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium dark:text-white">
-                    ${token.price.toFixed(2)}
-                  </td>
-                  <td
-                    className={`px-4 py-4 whitespace-nowrap text-right text-sm font-medium ${token.change >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}
-                  >
-                    {token.change >= 0 ? "+" : ""}
-                    {token.change.toFixed(2)}%
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
-                    ${token.volume.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
-                    ${token.marketCap.toLocaleString()}
-                  </td>
-                  <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
-                    <Button className="bg-green-600 hover:bg-green-700 text-white">Buy</Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Market Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
-          <div className="border dark:border-gray-800 rounded-lg p-6 bg-white dark:bg-gray-800">
-            <h3 className="text-lg font-medium mb-4 dark:text-white">Market Overview</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Total Tokens</span>
-                <span className="font-medium dark:text-white">8</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Total Volume (24h)</span>
-                <span className="font-medium dark:text-white">$69,200</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Total Market Cap</span>
-                <span className="font-medium dark:text-white">$1,510,000</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-500 dark:text-gray-400">Verified Tokens</span>
-                <span className="font-medium dark:text-white">5</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="border dark:border-gray-800 rounded-lg p-6 bg-white dark:bg-gray-800">
-            <h3 className="text-lg font-medium mb-4 dark:text-white">Top Performers (24h)</h3>
-            <div className="space-y-3">
-              {tokens
-                .sort((a, b) => b.change - a.change)
-                .slice(0, 3)
-                .map((token) => (
-                  <div key={token.id} className="flex items-center justify-between">
-                    <div className="flex items-center">
-                      <div className="relative h-8 w-8 mr-2">
-                        <Image src={token.image || "/placeholder.svg"} alt={token.name} fill className="rounded-full" />
-                      </div>
-                      <span className="font-medium dark:text-white">{token.symbol}</span>
-                    </div>
-                    <span className="text-green-600 dark:text-green-400">+{token.change.toFixed(2)}%</span>
-                  </div>
-                ))}
-            </div>
-          </div>
-
-          <div className="border dark:border-gray-800 rounded-lg p-6 bg-white dark:bg-gray-800">
-            <h3 className="text-lg font-medium mb-4 dark:text-white">Recently Added</h3>
-            <div className="space-y-3">
-              {tokens.slice(-3).map((token) => (
-                <div key={token.id} className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    <div className="relative h-8 w-8 mr-2">
-                      <Image src={token.image || "/placeholder.svg"} alt={token.name} fill className="rounded-full" />
-                    </div>
-                    <div>
-                      <div className="font-medium dark:text-white">{token.symbol}</div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">Added 2 days ago</div>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm" className="dark:border-gray-700 dark:text-gray-300">
-                    View
-                  </Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
+			{/* Farms Table */}
+			<div className="overflow-x-auto">
+			<table className="w-full border-collapse">
+				<thead>
+				<tr className="border-b dark:border-gray-800">
+					<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+					#
+					</th>
+					<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+					Farm
+					</th>
+					<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+					Owner
+					</th>
+					<th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+					Tree Count
+					</th>
+					<th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+					Target APY
+					</th>
+					<th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+					Status
+					</th>
+					<th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+					Action
+					</th>
+				</tr>
+				</thead>
+				<tbody>
+				{isLoadingActiveFarmIds || isLoadingFarmConfigs ? (
+					<tr>
+					<td colSpan={7} className="px-4 py-4 text-center text-gray-500 dark:text-gray-400">
+						Loading farms...
+					</td>
+					</tr>
+				) : activeFarmIdsError || farmConfigsError ? (
+					<tr>
+					<td colSpan={7} className="px-4 py-4 text-center text-red-600 dark:text-red-400">
+						Error loading farms
+					</td>
+					</tr>
+				) : filteredFarms.length === 0 ? (
+					<tr>
+					<td colSpan={7} className="px-4 py-4 text-center text-gray-500 dark:text-gray-400">
+						No farms found
+					</td>
+					</tr>
+				) : (
+					filteredFarms.map(({ farmId, data, error }, index) => (
+					<tr
+						key={farmId.toString()}
+						className="border-b dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+					>
+						<td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{index + 1}</td>
+						<td className="px-4 py-4 whitespace-nowrap">
+						{error ? (
+							<div className="text-red-600 dark:text-red-400">Error</div>
+						) : (
+							<div className="flex items-center">
+							<div className="text-sm font-medium text-gray-900 dark:text-white">{data.name}</div>
+							<div className="ml-2 text-sm text-gray-500 dark:text-gray-400">({data.shareTokenSymbol})</div>
+							</div>
+						)}
+						</td>
+						<td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+						{error ? "N/A" : truncateAddress(data.farmOwner)}
+						</td>
+						<td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
+						{error ? "N/A" : data.treeCount.toString()}
+						</td>
+						<td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
+						{error ? "N/A" : `${data.targetAPY.toString()}%`}
+						</td>
+						<td className="px-4 py-4 whitespace-nowrap text-right text-sm">
+						{error ? (
+							<span className="text-red-600 dark:text-red-400">Error</span>
+						) : data.isActive ? (
+							<span className="text-green-600 dark:text-green-400">Active</span>
+						) : (
+							<span className="text-gray-500 dark:text-gray-400">Inactive</span>
+						)}
+						</td>
+						<td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium">
+						<Button
+							className="bg-green-600 hover:bg-green-700 text-white"
+							// disabled={error || !data.isActive}
+						>
+							Invest
+						</Button>
+						</td>
+					</tr>
+					))
+				)}
+				</tbody>
+			</table>
+			</div>
+		</div>
+	  </div>
     </div>
   )
 }
-
