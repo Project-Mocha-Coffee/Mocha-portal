@@ -18,7 +18,7 @@ const NAV_LINKS = [
 ]
 
 export default function Header() {
-    const [darkMode, setDarkMode] = useState(false)
+    const [darkMode, setDarkMode] = useState(true)
     const pathname = usePathname()
 
     useEffect(() => {
