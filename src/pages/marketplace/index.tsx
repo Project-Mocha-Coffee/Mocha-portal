@@ -596,25 +596,28 @@ export default function Marketplace() {
             <table className="w-full border-collapse">
               <thead>
                 <tr className="border-b dark:border-gray-800">
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 font-bold py-3 text-left text-xs font-medium text-black-500 dark:text-gray-400 uppercase tracking-wider">
                     #
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 font-bold py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Farm
                   </th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 font-bold py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    Share Token Address
+                  </th>
+                  <th className="px-4 font-bold py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Owner
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 font-bold py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Bond Count
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 font-bold py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Annual Interest
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 font-bold py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                  <th className="px-4 font-bold py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                     Action
                   </th>
                 </tr>
@@ -657,6 +660,9 @@ export default function Marketplace() {
                         ) : null}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                        {error ? "N/A" : data ? truncateAddress(data.shareTokenAddress) : "N/A"}
+                      </td>
+                      <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                         {error ? "N/A" : data ? truncateAddress(data.farmOwner) : "N/A"}
                       </td>
                       <td className="px-4 py-4 whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400">
@@ -676,7 +682,6 @@ export default function Marketplace() {
                           )
                         ) : null}
                       </td>
-                      {console.log(data)}
                       <td className="px-4 py-4 whitespace-nowrap text-right text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                         <Button
                           className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"

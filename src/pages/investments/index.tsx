@@ -1,43 +1,28 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { ChevronDown, BarChart, Calendar, Clock, Moon, Sun } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Progress } from "@/components/ui/progress"
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import Image from "next/image"
-import Link from "next/link"
-import { useAccount, useReadContract, useReadContracts, useWriteContract, useBalance } from "wagmi"
-import { parseEther, formatEther } from "viem"
-import { scrollSepolia } from "viem/chains"
-import vault from "@/ABI/MochaTreeRightsABI.json"
-import Header from "@/components/@shared-components/header"
+import { useState, useEffect } from "react";
+import { ChevronDown, BarChart, Calendar, Clock, Moon, Sun } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAccount, useReadContracts, useReadContract, useWriteContract, useBalance } from "wagmi";
+import { formatEther } from "viem";
+import { scrollSepolia } from "viem/chains";
+import vault from "@/ABI/MochaTreeRightsABI.json";
+import Header from "@/components/@shared-components/header";
 
 const MOCHA_TREE_CONTRACT_ADDRESS = "0x4b02Bada976702E83Cf91Cd0B896852099099352";
 const MOCHA_TREE_CONTRACT_ABI = vault.abi;
-const ETH_PRICE_USD = 1000; 
-const EARLY_REDEMPTION_PENALTY = 0.2; 
+const ETH_PRICE_USD = 1000;
+const EARLY_REDEMPTION_PENALTY = 0.2;
 
-const monthlyReturns = [
-  { month: "Jan", return: 0.05 },
-  { month: "Feb", return: 0.08 },
-  { month: "Mar", return: 0.06 },
-  { month: "Apr", return: 0.0 },
-  { month: "May", return: 0.0 },
-  { month: "Jun", return: 0.0 },
-  { month: "Jul", return: 0.0 },
-  { month: "Aug", return: 0.0 },
-  { month: "Sep", return: 0.0 },
-  { month: "Oct", return: 0.0 },
-  { month: "Nov", return: 0.0 },
-  { month: "Dec", return: 0.0 },
-];
+// Placeholder for bond IDs (assumed to be provided externally, e.g., via props or context)
+const PLACEHOLDER_BOND_IDS = [1, 2, 3]; // Replace with actual bond IDs from an off-chain source
 
-export default function Investments() {
+export default function Investments({ userBondIds = PLACEHOLDER_BOND_IDS }) {
   const { address: userAddress, isConnected } = useAccount();
   const [activeTab, setActiveTab] = useState("Investments");
   const [investmentTab, setInvestmentTab] = useState("active");
@@ -49,39 +34,34 @@ export default function Investments() {
   const [selectedFarmId, setSelectedFarmId] = useState("");
   const [actionError, setActionError] = useState("");
 
-  // Fetch user's bonds
-  const { data: userBondIds, isLoading: isLoadingBondIds, error: bondIdsError } = useReadContract({
-    address: MOCHA_TREE_CONTRACT_ADDRESS,
-    abi: MOCHA_TREE_CONTRACT_ABI,
-    functionName: 'getUserBonds',
-    args: [userAddress],
-    chainId: scrollSepolia.id,
-    query: { enabled: isConnected },
-  });
-
-  const bondConfigContracts = userBondIds
+  // Fetch bond positions
+  const bondPositionContracts = userBondIds
     ? userBondIds.map((bondId) => ({
         address: MOCHA_TREE_CONTRACT_ADDRESS,
         abi: MOCHA_TREE_CONTRACT_ABI,
-        functionName: 'getBondDetails',
-        args: [bondId],
+        functionName: "getBondPosition",
+        args: [userAddress, BigInt(bondId)],
         chainId: scrollSepolia.id,
       }))
     : [];
 
-  const { data: bondConfigsData, isLoading: isLoadingBondConfigs, error: bondConfigsError } = useReadContracts({
-    contracts: bondConfigContracts,
+  const { data: bondPositionsData, isLoading: isLoadingBondPositions, error: bondPositionsError } = useReadContracts({
+    contracts: bondPositionContracts,
+    query: { enabled: isConnected && userBondIds.length > 0 },
   });
 
-  const farmIds = bondConfigsData
-    ? bondConfigsData.map((result) => (result.status === 'success' ? result.result.farmId : null)).filter(Boolean)
+  // Fetch farm configurations
+  const farmIds = bondPositionsData
+    ? bondPositionsData
+        .map((result) => (result.status === "success" && !result.result.redeemed ? result.result.farmId : null))
+        .filter(Boolean)
     : [];
 
   const farmConfigContracts = farmIds
     ? farmIds.map((farmId) => ({
         address: MOCHA_TREE_CONTRACT_ADDRESS,
         abi: MOCHA_TREE_CONTRACT_ABI,
-        functionName: 'getFarmConfig',
+        functionName: "getFarmConfig",
         args: [farmId],
         chainId: scrollSepolia.id,
       }))
@@ -89,6 +69,31 @@ export default function Investments() {
 
   const { data: farmConfigsData, isLoading: isLoadingFarmConfigs, error: farmConfigsError } = useReadContracts({
     contracts: farmConfigContracts,
+    query: { enabled: farmIds.length > 0 },
+  });
+
+  // Fetch yield distribution for chart
+  const yieldDistributionContracts = farmIds
+    ? farmIds.map((farmId) => ({
+        address: MOCHA_TREE_CONTRACT_ADDRESS,
+        abi: MOCHA_TREE_CONTRACT_ABI,
+        functionName: "getYieldDistribution",
+        args: [farmId],
+        chainId: scrollSepolia.id,
+      }))
+    : [];
+
+  const { data: yieldDistributionsData, isLoading: isLoadingYields, error: yieldsError } = useReadContracts({
+    contracts: yieldDistributionContracts,
+    query: { enabled: farmIds.length > 0 },
+  });
+
+  const { data: activeFarmIds } = useReadContract({
+    address: MOCHA_TREE_CONTRACT_ADDRESS,
+    abi: MOCHA_TREE_CONTRACT_ABI,
+    functionName: "getActiveFarmIds",
+    chainId: scrollSepolia.id,
+    query: { enabled: isConnected },
   });
 
   const { data: ethBalance } = useBalance({
@@ -97,36 +102,68 @@ export default function Investments() {
     query: { enabled: isConnected },
   });
 
-  const bonds = bondConfigsData
-    ? bondConfigsData.map((result, index) => ({
-        bondId: userBondIds[index],
-        data: result.status === 'success' ? result.result : null,
-        farmData: farmConfigsData && farmConfigsData[index]?.status === 'success' ? farmConfigsData[index].result : null,
-        error: result.status === 'failure' ? result.error : null,
-      }))
+  const { writeContract, isPending, isSuccess, error: writeError } = useWriteContract();
+
+  // Process bond data
+  const bonds = bondPositionsData
+    ? bondPositionsData.map((result, index) => {
+        const bondId = userBondIds[index];
+        const data = result.status === "success" ? result.result : null;
+        const farmData =
+          farmConfigsData && farmConfigsData[index]?.status === "success" ? farmConfigsData[index].result : null;
+        const now = Math.floor(Date.now() / 1000);
+        const status = data
+          ? data.redeemed
+            ? "Redeemed"
+            : data.maturityTimestamp <= now
+            ? "Matured"
+            : "Active"
+          : "Error";
+        return {
+          bondId,
+          data: data
+            ? {
+                farmId: data.farmId,
+                mbtAmount: data.depositAmount,
+                purchaseDate: data.depositTimestamp,
+                maturityDate: data.maturityTimestamp,
+                status,
+              }
+            : null,
+          farmData,
+          error: result.status === "failure" ? result.error : null,
+        };
+      })
     : [];
 
-  const activeBonds = bonds.filter(({ data, farmData }) => data?.status === "Active" && farmData?.isActive);
+  const activeBonds = bonds.filter(
+    ({ data, farmData }) => data?.status === "Active" && farmData?.active
+  );
   const maturedBonds = bonds.filter(({ data }) => data?.status === "Matured");
   const redeemedBonds = bonds.filter(({ data }) => data?.status === "Redeemed");
   const totalBonds = bonds.reduce((sum, { data }) => sum + (data ? Number(data.mbtAmount) : 0), 0);
   const totalValue = totalBonds * 0.1; // 1 MBT = 0.1 ETH
 
-  const { data: activeFarmIds } = useReadContract({
-    address: MOCHA_TREE_CONTRACT_ADDRESS,
-    abi: MOCHA_TREE_CONTRACT_ABI,
-    functionName: 'getActiveFarmIds',
-    chainId: scrollSepolia.id,
-  });
-
-  const { writeContract, isPending, isSuccess, error: writeError } = useWriteContract();
+  // Process yield distribution for chart
+  const monthlyReturns = yieldDistributionsData
+    ? yieldDistributionsData.map((result, index) => {
+        const farmId = farmIds[index];
+        const farm = farmConfigsData?.find((f, i) => f.status === "success" && farmIds[i] === farmId);
+        const yieldData = result.status === "success" ? result.result : null;
+        return {
+          farmName: farm?.status === "success" ? farm.result.name : `Farm ${farmId}`,
+          totalYield: yieldData ? Number(formatEther(yieldData.totalYield)) : 0,
+        };
+      })
+    : [];
 
   const handleConnectWallet = () => {
-    if (typeof openfort !== 'undefined') {
-      openfort.connect();
+    // Ensure openfort is defined and has a connect method
+    if (typeof window !== "undefined" && window.openfort && typeof window.openfort.connect === "function") {
+      window.openfort.connect();
     } else {
-      console.error("Openfort SDK not loaded");
-      setActionError("Wallet connection failed. Please try again.");
+      console.error("Openfort SDK not loaded or connect method unavailable");
+      setActionError("Wallet connection failed. Please ensure the Openfort SDK is properly configured.");
     }
   };
 
@@ -135,13 +172,12 @@ export default function Investments() {
       setActionError("Please connect your wallet");
       return;
     }
-
     setActionError("");
     try {
       await writeContract({
         address: MOCHA_TREE_CONTRACT_ADDRESS,
         abi: MOCHA_TREE_CONTRACT_ABI,
-        functionName: isEarly ? 'redeemBondEarly' : 'redeemBond',
+        functionName: isEarly ? "redeemBondEarly" : "redeemBond",
         args: [BigInt(bondId)],
       });
     } catch (err) {
@@ -158,13 +194,12 @@ export default function Investments() {
       setActionError("Please select a farm");
       return;
     }
-
     setActionError("");
     try {
       await writeContract({
         address: MOCHA_TREE_CONTRACT_ADDRESS,
         abi: MOCHA_TREE_CONTRACT_ABI,
-        functionName: 'rolloverBond',
+        functionName: "rolloverBond",
         args: [BigInt(selectedBondId), BigInt(selectedFarmId)],
       });
     } catch (err) {
@@ -211,78 +246,22 @@ export default function Investments() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200 text-gray-900 dark:text-white">
-      {/* Top Navigation */}
-      {/* <div className="flex items-center justify-between p-6 border-b dark:border-gray-800">
-        <div className="flex items-center space-x-2">
-          <div className="w-6 h-6 bg-amber-800 dark:bg-amber-700 rounded-sm flex items-center justify-center">
-            <div className="w-3 h-3 bg-white rounded-sm"></div>
-          </div>
-          <span className="font-semibold text-lg dark:text-white">Project Mocha</span>
-        </div>
-        <div className="flex items-center space-x-4">
-          <div className="bg-black rounded-full px-4 py-2 flex items-center mr-4">
-            <Link href="/dashboard">
-              <button
-                className={`px-4 py-1 rounded-full flex items-center ${activeTab === "Dashboard" ? "text-white" : "text-gray-400"}`}
-                onClick={() => setActiveTab("Dashboard")}
-              >
-                Dashboard <ChevronDown className="ml-1 w-4 h-4" />
-              </button>
-            </Link>
-            <Link href="/marketplace">
-              <button
-                className={`px-4 py-1 rounded-full ${activeTab === "Marketplace" ? "text-white" : "text-gray-400"}`}
-                onClick={() => setActiveTab("Marketplace")}
-              >
-                Marketplace
-              </button>
-            </Link>
-            <Link href="/staking">
-              <button
-                className={`px-4 py-1 rounded-full ${activeTab === "Staking" ? "text-white" : "text-gray-400"}`}
-                onClick={() => setActiveTab("Staking")}
-              >
-                Staking
-              </button>
-            </Link>
-            <Link href="/investments">
-              <button
-                className={`px-4 py-1 rounded-full ${activeTab === "Investments" ? "text-white" : "text-gray-400"}`}
-                onClick={() => setActiveTab("Investments")}
-              >
-                Investments
-              </button>
-            </Link>
-          </div>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={toggleDarkMode}
-            className="rounded-full bg-white dark:bg-gray-800 border-none dark:text-gray-300"
-          >
-            {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </Button>
-          <div className="flex items-center bg-white dark:bg-gray-800 rounded-full border-none px-2 py-1">
-            <div className="w-8 h-8 rounded-full bg-amber-200 dark:bg-amber-700 overflow-hidden mr-2">
-              <Image src="/placeholder.svg?height=32&width=32" alt="Profile" width={32} height={32} />
-            </div>
-            <span className="text-sm mr-1 dark:text-white">{truncateAddress(userAddress)}</span>
-            <ChevronDown className="w-4 h-4 dark:text-gray-400" />
-          </div>
-        </div>
-      </div> */}
-      <Header />
-
-      {/* Main Content */}
+      <Header onConnectWallet={handleConnectWallet} />
       <div className="pt-[100px]">
         <div className="px-6 py-4">
-          {/* Investments Header */}
           <div className="mb-4">
             <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">INVESTMENTS</div>
             <h1 className="text-3xl font-bold dark:text-white">Your Mocha Bond Investments</h1>
           </div>
-
-          {/* Investment Stats */}
+          <Card className="bg-white dark:bg-gray-800 border-none mb-8">
+            <CardHeader>
+              <CardTitle className="dark:text-white">Chat Feature</CardTitle>
+              <CardDescription className="dark:text-gray-400">Stay tuned for updates!</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-600 dark:text-gray-300">Chat coming soon</p>
+            </CardContent>
+          </Card>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <Card className="bg-white dark:bg-gray-800 border-none">
               <CardContent className="p-6">
@@ -327,44 +306,61 @@ export default function Investments() {
               </CardContent>
             </Card>
           </div>
-
-          {/* Performance Chart */}
           <Card className="bg-white dark:bg-gray-800 border-none mb-8">
             <CardHeader>
               <CardTitle className="dark:text-white">Investment Performance</CardTitle>
-              <CardDescription className="dark:text-gray-400">Monthly returns for 2025</CardDescription>
+              <CardDescription className="dark:text-gray-400">Total yield by farm</CardDescription>
             </CardHeader>
-            <CardContent className="h-80">
-              <div className="h-full w-full flex items-center justify-center">
-                <div className="w-full h-full flex flex-col">
-                  <div className="flex justify-between mb-2">
-                    <div className="text-xs text-gray-500 dark:text-gray-400">ETH</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">Month</div>
-                  </div>
-                  <div className="flex-1 flex items-end">
-                    {monthlyReturns.map((item, index) => (
-                      <div key={index} className="flex-1 flex flex-col items-center">
-                        <div
-                          className="w-4/5 bg-amber-500 dark:bg-amber-600 rounded-t-sm"
-                          style={{ height: `${(item.return / 0.08) * 100}%` }}
-                        ></div>
-                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{item.month}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
+            {/* <CardContent className="h-80">
+              {isLoadingYields ? (
+                <div>Loading yield data...</div>
+              ) : yieldsError ? (
+                <div>Error loading yield data</div>
+              ) : monthlyReturns.length > 0 ? (
+                ```chartjs
+                {
+                  "type": "bar",
+                  "data": {
+                    "labels": ${JSON.stringify(monthlyReturns.map((item) => item.farmName))},
+                    "datasets": [
+                      {
+                        "label": "Total Yield (ETH)",
+                        "data": ${JSON.stringify(monthlyReturns.map((item) => item.totalYield))},
+                        "backgroundColor": "rgba(245, 158, 11, 0.6)",
+                        "borderColor": "rgba(245, 158, 11, 1)",
+                        "borderWidth": 1
+                      }
+                    ]
+                  },
+                  "options": {
+                    "scales": {
+                      "y": {
+                        "beginAtZero": true,
+                        "title": { "display": true, "text": "Yield (ETH)", "color": "#ffffff" },
+                        "ticks": { "color": "#ffffff" }
+                      },
+                      "x": {
+                        "title": { "display": true, "text": "Farm", "color": "#ffffff" },
+                        "ticks": { "color": "#ffffff" }
+                      }
+                    },
+                    "plugins": {
+                      "legend": { "labels": { "color": "#ffffff" } }
+                    }
+                  }
+                }
+                ```
+              ) : (
+                <div>No yield data available</div>
+              )}
+            </CardContent> */}
           </Card>
-
-          {/* Investment Tabs */}
           <Tabs defaultValue="active" value={investmentTab} onValueChange={setInvestmentTab}>
             <TabsList className="bg-gray-100 dark:bg-gray-800 border-none mb-6">
               <TabsTrigger value="active">Active Investments</TabsTrigger>
               <TabsTrigger value="matured">Matured Investments</TabsTrigger>
               <TabsTrigger value="redeemed">Redemption History</TabsTrigger>
             </TabsList>
-
             <TabsContent value="active">
               <Card className="bg-white dark:bg-gray-800 border-none">
                 <CardHeader>
@@ -385,13 +381,13 @@ export default function Investments() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {isLoadingBondIds || isLoadingBondConfigs || isLoadingFarmConfigs ? (
+                      {isLoadingBondPositions || isLoadingFarmConfigs ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-4 text-gray-500 dark:text-gray-400">
                             Loading investments...
                           </TableCell>
                         </TableRow>
-                      ) : bondIdsError || bondConfigsError || farmConfigsError ? (
+                      ) : bondPositionsError || farmConfigsError ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-4 text-red-600 dark:text-red-400">
                             Error loading investments
@@ -405,7 +401,7 @@ export default function Investments() {
                             <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : data.mbtAmount.toString()}</TableCell>
                             <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : new Date(Number(data.purchaseDate) * 1000).toLocaleDateString()}</TableCell>
                             <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : (Number(data.mbtAmount) * 0.1).toFixed(2)}</TableCell>
-                            <TableCell className="dark:text-gray-300">{error || !farmData ? "N/A" : new Date(Number(farmData.maturityDate) * 1000).toLocaleDateString()}</TableCell>
+                            <TableCell className="dark:text-gray-300">{error || !farmData ? "N/A" : new Date(Number(farmData.maturityTimestamp) * 1000).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right">
                               <Button
                                 size="sm"
@@ -433,7 +429,6 @@ export default function Investments() {
                 </CardContent>
               </Card>
             </TabsContent>
-
             <TabsContent value="matured">
               <Card className="bg-white dark:bg-gray-800 border-none">
                 <CardHeader>
@@ -454,13 +449,13 @@ export default function Investments() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {isLoadingBondIds || isLoadingBondConfigs || isLoadingFarmConfigs ? (
+                      {isLoadingBondPositions || isLoadingFarmConfigs ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-4 text-gray-500 dark:text-gray-400">
                             Loading investments...
                           </TableCell>
                         </TableRow>
-                      ) : bondIdsError || bondConfigsError || farmConfigsError ? (
+                      ) : bondPositionsError || farmConfigsError ? (
                         <TableRow>
                           <TableCell colSpan={7} className="text-center py-4 text-red-600 dark:text-red-400">
                             Error loading investments
@@ -474,7 +469,7 @@ export default function Investments() {
                             <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : data.mbtAmount.toString()}</TableCell>
                             <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : new Date(Number(data.purchaseDate) * 1000).toLocaleDateString()}</TableCell>
                             <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : (Number(data.mbtAmount) * 0.1).toFixed(2)}</TableCell>
-                            <TableCell className="dark:text-gray-300">{error || !farmData ? "N/A" : new Date(Number(farmData.maturityDate) * 1000).toLocaleDateString()}</TableCell>
+                            <TableCell className="dark:text-gray-300">{error || !farmData ? "N/A" : new Date(Number(farmData.maturityTimestamp) * 1000).toLocaleDateString()}</TableCell>
                             <TableCell className="text-right space-x-2">
                               <Button
                                 size="sm"
@@ -513,7 +508,6 @@ export default function Investments() {
                 </CardContent>
               </Card>
             </TabsContent>
-
             <TabsContent value="redeemed">
               <Card className="bg-white dark:bg-gray-800 border-none">
                 <CardHeader>
@@ -533,13 +527,13 @@ export default function Investments() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {isLoadingBondIds || isLoadingBondConfigs || isLoadingFarmConfigs ? (
+                      {isLoadingBondPositions || isLoadingFarmConfigs ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-4 text-gray-500 dark:text-gray-400">
                             Loading redemption history...
                           </TableCell>
                         </TableRow>
-                      ) : bondIdsError || bondConfigsError || farmConfigsError ? (
+                      ) : bondPositionsError || farmConfigsError ? (
                         <TableRow>
                           <TableCell colSpan={6} className="text-center py-4 text-red-600 dark:text-red-400">
                             Error loading redemption history
@@ -552,7 +546,7 @@ export default function Investments() {
                             <TableCell className="dark:text-gray-300">{bondId.toString()}</TableCell>
                             <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : data.mbtAmount.toString()}</TableCell>
                             <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : new Date(Number(data.purchaseDate) * 1000).toLocaleDateString()}</TableCell>
-                            <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : new Date(Number(data.redemptionDate) * 1000).toLocaleDateString()}</TableCell>
+                            <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : "N/A"}</TableCell>
                             <TableCell className="dark:text-gray-300">{error || !data ? "N/A" : (Number(data.mbtAmount) * 0.1).toFixed(2)}</TableCell>
                           </TableRow>
                         ))
@@ -569,8 +563,6 @@ export default function Investments() {
               </Card>
             </TabsContent>
           </Tabs>
-
-          {/* Redeem Modal */}
           <Dialog open={isRedeemModalOpen} onOpenChange={setIsRedeemModalOpen}>
             <DialogContent className="bg-gray-50 dark:bg-gray-800 border-none max-w-[500px] p-6">
               <DialogHeader>
@@ -644,8 +636,6 @@ export default function Investments() {
               )}
             </DialogContent>
           </Dialog>
-
-          {/* Rollover Modal */}
           <Dialog open={isRolloverModalOpen} onOpenChange={setIsRolloverModalOpen}>
             <DialogContent className="bg-gray-50 dark:bg-gray-800 border-none max-w-[500px] p-6">
               <DialogHeader>
@@ -679,10 +669,10 @@ export default function Investments() {
                         <SelectContent className="bg-white dark:bg-gray-800 border-none">
                           {activeFarmIds && activeFarmIds.length > 0 ? (
                             activeFarmIds.map((farmId) => {
-                              const farm = farmConfigsData?.find((f, i) => f.status === 'success' && farmIds[i] === farmId);
+                              const farm = farmConfigsData?.find((f, i) => f.status === "success" && farmIds[i] === farmId);
                               return (
                                 <SelectItem key={farmId.toString()} value={farmId.toString()}>
-                                  {farm?.status === 'success' ? farm.result.name : `Farm ${farmId}`}
+                                  {farm?.status === "success" ? farm.result.name : `Farm ${farmId}`}
                                 </SelectItem>
                               );
                             })
@@ -727,8 +717,6 @@ export default function Investments() {
               )}
             </DialogContent>
           </Dialog>
-
-          {/* About Investments */}
           <Card className="bg-white dark:bg-gray-800 border-none mt-8">
             <CardHeader>
               <CardTitle className="dark:text-white">About Mocha Bond Investments</CardTitle>

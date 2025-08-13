@@ -33,6 +33,23 @@ export default function Dashboard() {
   const [selectedFarmId, setSelectedFarmId] = useState("")
   const [bondAmount, setBondAmount] = useState("1")
   const [purchaseError, setPurchaseError] = useState("")
+  const [currentInfoIndex, setCurrentInfoIndex] = useState(0)
+
+  // Info items for carousel
+  const infoItems = [
+    "Next Interest Payment: June 2026",
+    "Interest Rate: 10%",
+    "Maturity: June 2030"
+  ]
+
+  // Navigation handlers for info items
+  const handlePrevInfo = () => {
+    setCurrentInfoIndex((prev) => (prev === 0 ? infoItems.length - 1 : prev - 1))
+  }
+
+  const handleNextInfo = () => {
+    setCurrentInfoIndex((prev) => (prev === infoItems.length - 1 ? 0 : prev + 1))
+  }
 
   // Fetch contract data
   const { data: activeFarmIds, isLoading: isLoadingActiveFarmIds, error: activeFarmIdsError } = useReadContract({
@@ -240,48 +257,48 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[#E6E6E6] dark:bg-gray-900 transition-colors duration-200 text-gray-900 dark:text-white">
       <Header />
       <div className="pt-[72px]">
-        <div className="px-12 py-8">
+        <div className="px-4 sm:px-12 py-8">
           <div className="mb-4">
             <div className="text-xs text-gray-500 dark:text-gray-400 font-medium">MOCHA ASSET-BACKED BONDS</div>
             <h1 className="text-3xl font-bold dark:text-white"> Dashboard</h1>
           </div>
 
-          <div className="flex items-center justify-between border-b dark:border-gray-800">
-            <div className="flex items-center">
-              <button
-                className={`px-4 py-3 ${overviewTab === "Overview" ? "border-b-2 border-brown-800 dark:border-amber-600 font-medium dark:text-white" : "text-gray-500 dark:text-gray-400"}`}
-                onClick={() => setOverviewTab("Overview")}
-              >
-                Overview
-              </button>
-              <button
-                className={`px-4 py-3 ${overviewTab === "Bonds" ? "border-b-2 border-brown-800 dark:border-amber-600 font-medium dark:text-white" : "text-gray-500 dark:text-gray-400"}`}
-                onClick={() => setOverviewTab("Bonds")}
-              >
-                Bonds
-              </button>
-              <button
-                className={`px-4 py-3 ${overviewTab === "History" ? "border-b-2 border-brown-800 dark:border-amber-600 font-medium dark:text-white" : "text-gray-500 dark:text-gray-400"}`}
-                onClick={() => setOverviewTab("History")}
-              >
-                History
-              </button>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b-2 dark:border-gray-800">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 w-full sm:w-auto mb-4 sm:mb-0">
+              {["Overview", "Bonds", "History"].map((tab) => (
+                <button
+                  key={tab}
+                  className={`px-4 py-3 font-medium relative w-full sm:w-auto text-left sm:text-center ${
+                    overviewTab === tab
+                      ? "text-[#522912] font-bold border-b-4 border-[#522912] dark:text-[#522912] dark:border-[#522912]"
+                      : "text-gray-500 dark:text-gray-400"
+                  }`}
+                  onClick={() => setOverviewTab(tab)}
+                >
+                  {tab}
+                </button>
+              ))}
             </div>
-            <div className="flex items-center">
-              <ChevronLeft className="w-5 h-5 text-gray-400 dark:text-gray-500" />
-              <div className="flex items-center mx-4">
-                <span className="text-sm mr-1 dark:text-gray-300">Next Interest Payment: June 2026</span>
-                <Info className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+            <div className="flex items-center w-full sm:w-auto justify-between sm:justify-end">
+              <button onClick={handlePrevInfo} className="p-2">
+                <ChevronLeft className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+              </button>
+              <div className="flex items-center mx-2 sm:mx-4 overflow-hidden">
+                <div
+                  className="flex transition-transform duration-300 ease-in-out"
+                  style={{ transform: `translateX(-${currentInfoIndex * 100}%)` }}
+                >
+                  {infoItems.map((item, index) => (
+                    <div key={index} className="flex items-center min-w-full">
+                      <span className="text-sm mr-1 dark:text-gray-300 whitespace-nowrap">{item}</span>
+                      <Info className="w-4 h-4 text-gray-400 dark:text-gray-500" />
+                    </div>
+                  ))}
+                </div>
               </div>
-              <div className="flex items-center mx-4 border-l border-r border-gray-200 dark:border-gray-700 px-4">
-                <span className="text-sm mr-1 dark:text-gray-300">Interest Rate: 10%</span>
-                <Info className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-              </div>
-              <div className="flex items-center mx-4">
-                <span className="text-sm mr-1 dark:text-gray-300">Maturity: June 2030</span>
-                <Info className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-              </div>
-              <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+              <button onClick={handleNextInfo} className="p-2">
+                <ChevronRight className="w-5 h-5 text-gray-400 dark:text-gray-500" />
+              </button>
             </div>
           </div>
 
