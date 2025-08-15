@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, Filter, ArrowUp, ArrowDown, AlertTriangle } from "lucide-react"
+import { Search, Filter, ArrowUp, ArrowDown, AlertTriangle, CheckCircle } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -12,6 +12,7 @@ import { parseUnits, formatUnits } from "viem"
 import { scrollSepolia } from "viem/chains"
 import Header from "@/components/@shared-components/header"
 import vault from "@/ABI/MochaTreeRightsABI.json"
+import { Toaster, toast } from "sonner"
 
 // Types
 interface FarmConfig {
@@ -124,6 +125,7 @@ export default function Marketplace() {
   const [selectedFarmData, setSelectedFarmData] = useState<SelectedFarmData | null>(null);
   const [isApproving, setIsApproving] = useState<boolean>(false);
   const [approvalTxHash, setApprovalTxHash] = useState<string>("");
+  const [purchaseSuccessDetails, setPurchaseSuccessDetails] = useState<{ bonds: number; farmName: string; txHash: string } | null>(null);
 
   // Contract reads
   const { data: activeFarmIds, isLoading: isLoadingActiveFarmIds, error: activeFarmIdsError } = useReadContract({
@@ -309,8 +311,10 @@ export default function Marketplace() {
         args: [BigInt(selectedFarmId), totalCost],
       });
 
+      const bonds = Math.floor(bondCount);
+      setPurchaseSuccessDetails({ bonds, farmName: selectedFarmName, txHash });
       setPurchaseError("");
-      setIsPurchaseModalOpen(false);
+      toast.success(`Successfully purchased ${bonds} bonds for ${selectedFarmName}! Transaction: ${txHash}`);
       logAction("Bond Purchase Successful", { 
         userAddress, 
         farmId: selectedFarmId, 
@@ -443,6 +447,7 @@ export default function Marketplace() {
     if (!open) {
       setMbtAmount("");
       setPurchaseError("");
+      setPurchaseSuccessDetails(null);
     }
     logAction(`Purchase Modal ${open ? "Opened" : "Closed"}`, { userAddress, farmId: selectedFarmId, farmName: selectedFarmName });
   };
@@ -527,6 +532,7 @@ export default function Marketplace() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200 text-gray-900 dark:text-white">
+      <Toaster richColors position="bottom-right" />
       <Header />
       <div className="pt-[72px]">
         <div className="py-8 px-4 md:px-8">
@@ -833,6 +839,17 @@ export default function Marketplace() {
                       Connect Wallet
                     </Button>
                   </div>
+                ) : purchaseSuccessDetails ? (
+                  <div className="text-center py-8">
+                    <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <h3 className="text-2xl font-bold mb-2 dark:text-white">Purchase Successful!</h3>
+                    <p className="text-gray-600 dark:text-gray-300 mb-4">
+                      You have purchased {purchaseSuccessDetails.bonds} bonds for {purchaseSuccessDetails.farmName}.
+                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Transaction Hash: {truncateAddress(purchaseSuccessDetails.txHash)}
+                    </p>
+                  </div>
                 ) : (
                   <>
                     <div className="bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
@@ -958,12 +975,6 @@ export default function Marketplace() {
                       </div>
                     )}
 
-                    {isPurchaseSuccess && (
-                      <div className="bg-green-50 dark:bg-green-900/20 p-3 rounded-lg border border-green-200 dark:border-green-800">
-                        <p className="text-green-600 dark:text-green-400 text-sm">Purchase successful! You have purchased {Math.floor(bondCount)} bonds.</p>
-                      </div>
-                    )}
-
                     <div className="text-xs text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 p-3 rounded-lg">
                       <p className="mb-1">
                         <strong>Important:</strong> By proceeding, you agree to:
@@ -989,24 +1000,28 @@ export default function Marketplace() {
                     }}
                     disabled={isApprovePending || isPurchasePending || isApproving}
                   >
-                    Cancel
+                    {purchaseSuccessDetails ? "Close" : "Cancel"}
                   </Button>
-                  {needsApproval ? (
-                    <Button
-                      className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
-                      onClick={handleApprove}
-                      disabled={!canProceed || isApproving || isApprovePending || isPurchasePending}
-                    >
-                      {isApproving || isApprovePending ? "Approving..." : `Approve ${mbtAmountNum.toFixed(2)} MBT`}
-                    </Button>
-                  ) : (
-                    <Button
-                      className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
-                      onClick={handlePurchase}
-                      disabled={!canProceed || isApproving || isApprovePending || isPurchasePending}
-                    >
-                      {isPurchasePending ? "Purchasing..." : `Purchase ${Math.floor(bondCount)} Bonds`}
-                    </Button>
+                  {!purchaseSuccessDetails && (
+                    <>
+                      {needsApproval ? (
+                        <Button
+                          className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
+                          onClick={handleApprove}
+                          disabled={!canProceed || isApproving || isApprovePending || isPurchasePending}
+                        >
+                          {isApproving || isApprovePending ? "Approving..." : `Approve ${mbtAmountNum.toFixed(2)} MBT`}
+                        </Button>
+                      ) : (
+                        <Button
+                          className="bg-[#7A5540] hover:bg-[#6A4A36] text-white border-none"
+                          onClick={handlePurchase}
+                          disabled={!canProceed || isApproving || isApprovePending || isPurchasePending}
+                        >
+                          {isPurchasePending ? "Purchasing..." : `Purchase ${Math.floor(bondCount)} Bonds`}
+                        </Button>
+                      )}
+                    </>
                   )}
                 </DialogFooter>
               )}
