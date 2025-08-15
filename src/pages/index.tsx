@@ -368,7 +368,7 @@ export default function Dashboard() {
                 <div className="text-xs font-medium text-gray-500 dark:text-gray-400">QUICK ACTIONS</div>
                 <div className="bg-[#7A5540] dark:bg-amber-700 text-white text-xs px-2 py-1 rounded-full">1/1</div>
               </div>
-              <h2 className="text-xl font-bold mb-4 dark:text-white">Manage Your Bonds</h2>
+              {/* <h2 className="text-xl font-bold mb-4 dark:text-white">Manage Your Bonds</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
                 Purchase new Mocha Asset-Backed Bonds to invest in Kenya’s coffee trees.
               </p>
@@ -380,7 +380,7 @@ export default function Dashboard() {
                   <Coffee className="mr-2 h-4 w-4" />
                   Buy MABB Tokens
                 </Button>
-              </div>
+              </div> */}
               <div className="bg-white dark:bg-gray-700 border dark:border-gray-600 rounded-lg p-4 mb-4">
                 <div className="flex justify-between items-center">
                   <div>
@@ -441,9 +441,9 @@ export default function Dashboard() {
                                   <span className="font-medium dark:text-white">${(formatEther(Number(balance) * 10))}</span>
                                 </div>
                                 <div className="flex gap-2">
-                                  <Button size="sm" variant="outline" className="dark:border-gray-600 dark:text-gray-300" disabled={error}>
+                                  {/* <Button size="sm" variant="outline" className="dark:border-gray-600 dark:text-gray-300" disabled={error}>
                                     Transfer
-                                  </Button>
+                                  </Button> */}
                                 </div>
                               </div>
                             </div>

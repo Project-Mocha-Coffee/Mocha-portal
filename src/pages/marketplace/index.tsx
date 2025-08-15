@@ -531,7 +531,7 @@ export default function Marketplace() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-900 transition-colors duration-200 text-gray-900 dark:text-white">
+    <div className="min-h-screen bg-[#E6E6E6] dark:bg-gray-900 transition-colors duration-200 text-gray-900 dark:text-white">
       <Toaster richColors position="bottom-right" />
       <Header />
       <div className="pt-[72px]">
@@ -820,7 +820,7 @@ export default function Marketplace() {
 
           {/* Purchase Bonds Modal */}
           <Dialog open={isPurchaseModalOpen} onOpenChange={setIsPurchaseModalOpenWrapper}>
-            <DialogContent className="bg-gray-50 dark:bg-gray-800 border-none p-6 sm:max-w-md">
+            <DialogContent className="bg-gray-50 dark:bg-gray-800 border-none p-6 text-gray-500 sm:max-w-md">
               <DialogHeader>
                 <DialogTitle className="text-xl font-bold dark:text-white">
                   Purchase Bonds for {selectedFarmName || "Selected Farm"}
