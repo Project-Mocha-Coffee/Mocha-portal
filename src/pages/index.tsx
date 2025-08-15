@@ -150,21 +150,21 @@ export default function Dashboard() {
   const statCards = [
     {
       title: "Total Bonds Owned",
-      value: `${totalBondsOwned} Bonds`,
+      value: `${formatEther(totalBondsOwned)} Bonds`,
       isLoading: isLoadingBalances || isLoadingFarmConfigs,
       iconColor: "green",
       icon: "Coffee",
     },
     {
       title: "Annual Interest",
-      value: `$ ${annualInterest.toFixed(2)}`,
+      value: `$ ${formatEther(annualInterest)}`,
       isLoading: isLoadingBalances || isLoadingFarmConfigs,
       iconColor: "red",
       icon: "DollarSign",
     },
     {
       title: "Cumulative Return",
-      value: `$ ${cumulativeReturn.toFixed(2)}`,
+      value: `$ ${formatEther(cumulativeReturn)}`,
       isLoading: isLoadingBalances || isLoadingFarmConfigs,
       iconColor: "yellow",
       icon: "TrendingUp",
@@ -393,7 +393,7 @@ export default function Dashboard() {
                 </div>
                 <div className="mt-2 pt-2 border-t dark:border-gray-600">
                   <div className="text-sm text-gray-500 dark:text-gray-400">Estimated Interest</div>
-                  <div className="text-lg font-medium dark:text-white">${annualInterest.toFixed(2)}</div>
+                  <div className="text-lg font-medium dark:text-white">${formatEther(annualInterest)}</div>
                 </div>
               </div>
               <div className="flex items-center justify-center">
@@ -432,13 +432,13 @@ export default function Dashboard() {
                                 </div>
                                 <div className="text-right">
                                   <p className="text-sm text-gray-500 dark:text-gray-400">Bonds Owned</p>
-                                  <p className="font-medium dark:text-white">{balance.toString()} Bonds</p>
+                                  <p className="font-medium dark:text-white">{formatEther(balance)} Bonds</p>
                                 </div>
                               </div>
                               <div className="flex justify-between items-center mt-4">
                                 <div className="flex items-center">
                                   <span className="text-sm text-gray-500 dark:text-gray-400 mr-2">Annual Interest:</span>
-                                  <span className="font-medium dark:text-white">${(Number(balance) * 10).toFixed(2)}</span>
+                                  <span className="font-medium dark:text-white">${(formatEther(Number(balance) * 10))}</span>
                                 </div>
                                 <div className="flex gap-2">
                                   <Button size="sm" variant="outline" className="dark:border-gray-600 dark:text-gray-300" disabled={error}>
